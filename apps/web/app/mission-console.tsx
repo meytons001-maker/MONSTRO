@@ -18,16 +18,19 @@ export function MissionConsole() {
   const [intent, setIntent] = useState("Crie uma experiência web cinematográfica e valide o resultado.");
   const [events, setEvents] = useState<MissionEvent[]>([]);
   const [running, setRunning] = useState(false);
+  const [previewRevision, setPreviewRevision] = useState(0);
 
   const latest = events.at(-1);
   const activeIndex = latest ? pipeline.indexOf(latest.phase) : -1;
   const previewUrl = [...events].reverse().find((event) => event.data?.previewUrl)?.data?.previewUrl;
+  const previewSrc = previewUrl ? `${previewUrl}${previewUrl.includes("?") ? "&" : "?"}rev=${previewRevision}` : undefined;
 
   async function execute(event: FormEvent) {
     event.preventDefault();
     if (!intent.trim() || running) return;
     setEvents([]);
     setRunning(true);
+    setPreviewRevision(0);
 
     try {
       const response = await fetch("/api/missions", {
@@ -59,15 +62,25 @@ export function MissionConsole() {
   }
 
   return (
-    <>
+    <div className="missionConsole">
       <form className="prompt" onSubmit={execute}>
         <span>›</span><input aria-label="Prompt" value={intent} onChange={(event) => setIntent(event.target.value)} placeholder="Diga ao Monstro o que construir..."/><button disabled={running}>{running ? "RUNNING" : "EXECUTE"}</button>
       </form>
       <div className="missionFeed">
         {events.slice(-4).map((event) => <div key={event.id}><b>{event.phase.toUpperCase()}</b> {event.type}{event.detail ? ` · ${event.detail}` : ""}</div>)}
-        {previewUrl ? <div><b>PREVIEW</b> <a href={previewUrl} target="_blank" rel="noreferrer">{previewUrl}</a></div> : null}
       </div>
       <div className="pipeline livePipeline">{pipeline.map((phase, index) => <div key={phase} className={index < activeIndex ? "done" : index === activeIndex ? "running" : ""}><b>{String(index + 1).padStart(2,"0")}</b><span>{phase.toUpperCase()}</span></div>)}</div>
-    </>
+
+      <section className="livePreviewStage" aria-label="Live preview">
+        <div className="previewToolbar">
+          <span><i className={previewUrl ? "online" : ""} /> {previewUrl ? "MISSION PREVIEW" : "WAITING FOR BUILD"}</span>
+          <div>
+            <button type="button" disabled={!previewUrl} onClick={() => setPreviewRevision((value) => value + 1)}>REFRESH</button>
+            {previewUrl ? <a href={previewUrl} target="_blank" rel="noreferrer">OPEN ↗</a> : null}
+          </div>
+        </div>
+        {previewSrc ? <iframe key={previewSrc} title="MONSTRO generated preview" src={previewSrc} sandbox="allow-scripts allow-forms allow-modals allow-popups" /> : <div className="previewEmpty"><div className="orb"><div className="core">M</div></div><h1>BUILD. RUN.<br/><em>OBSERVE. REPAIR.</em></h1><p>Execute uma missão para renderizar o artefato real aqui.</p></div>}
+      </section>
+    </div>
   );
 }
