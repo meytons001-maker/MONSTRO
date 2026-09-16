@@ -4,6 +4,7 @@ export type TaskPhase =
   | "plan"
   | "build"
   | "run"
+  | "observe"
   | "evaluate"
   | "repair"
   | "deliver"
@@ -19,75 +20,20 @@ export type Capability =
   | "code.analyze"
   | "security.authorized-analysis";
 
-export interface AcceptanceCriterion {
-  id: string;
-  description: string;
-  required: boolean;
-}
+export interface AcceptanceCriterion { id: string; description: string; required: boolean; }
+export interface ProjectContext { projectId: string; rootDir: string; summary: string; decisions: string[]; }
+export interface MonstroTask { id: string; intent: string; phase: TaskPhase; context: ProjectContext; requestedCapabilities: Capability[]; acceptance: AcceptanceCriterion[]; iteration: number; maxIterations: number; }
+export interface Evidence { source: string; kind: "code" | "runtime" | "visual" | "network" | "user"; summary: string; data?: unknown; }
+export interface BuildPlanStep { id: string; title: string; description: string; status: "pending" | "running" | "done" | "failed"; }
+export interface BuildPlan { taskId: string; rationale: string; steps: BuildPlanStep[]; }
+export interface FilePatch { path: string; operation: "create" | "update" | "delete"; content?: string; }
+export interface RuntimeResult { ok: boolean; previewUrl?: string; stdout: string; stderr: string; durationMs: number; }
 
-export interface ProjectContext {
-  projectId: string;
-  rootDir: string;
-  summary: string;
-  decisions: string[];
-}
-
-export interface MonstroTask {
-  id: string;
-  intent: string;
-  phase: TaskPhase;
-  context: ProjectContext;
-  requestedCapabilities: Capability[];
-  acceptance: AcceptanceCriterion[];
-  iteration: number;
-  maxIterations: number;
-}
-
-export interface Evidence {
-  source: string;
-  kind: "code" | "runtime" | "visual" | "network" | "user";
-  summary: string;
-  data?: unknown;
-}
-
-export interface BuildPlanStep {
-  id: string;
-  title: string;
-  description: string;
-  status: "pending" | "running" | "done" | "failed";
-}
-
-export interface BuildPlan {
-  taskId: string;
-  rationale: string;
-  steps: BuildPlanStep[];
-}
-
-export interface FilePatch {
-  path: string;
-  operation: "create" | "update" | "delete";
-  content?: string;
-}
-
-export interface RuntimeResult {
+export interface ObservationResult {
   ok: boolean;
-  previewUrl?: string;
-  stdout: string;
-  stderr: string;
+  evidence: Evidence[];
   durationMs: number;
 }
 
-export interface Evaluation {
-  accepted: boolean;
-  score: number;
-  findings: string[];
-  nextActions: string[];
-}
-
-export interface Delivery {
-  taskId: string;
-  completedAt: string;
-  summary: string;
-  previewUrl?: string;
-  artifacts: string[];
-}
+export interface Evaluation { accepted: boolean; score: number; findings: string[]; nextActions: string[]; }
+export interface Delivery { taskId: string; completedAt: string; summary: string; previewUrl?: string; artifacts: string[]; }
