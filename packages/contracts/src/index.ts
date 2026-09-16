@@ -29,11 +29,10 @@ export interface BuildPlan { taskId: string; rationale: string; steps: BuildPlan
 export interface FilePatch { path: string; operation: "create" | "update" | "delete"; content?: string; }
 export interface RuntimeResult { ok: boolean; previewUrl?: string; stdout: string; stderr: string; durationMs: number; }
 
-export interface ObservationResult {
-  ok: boolean;
-  evidence: Evidence[];
-  durationMs: number;
-}
+export interface ObservationResult { ok: boolean; evidence: Evidence[]; durationMs: number; }
 
-export interface Evaluation { accepted: boolean; score: number; findings: string[]; nextActions: string[]; }
+export type FindingCode = "runtime.failed" | "observation.failed" | "document.title" | "document.heading" | "acceptance.unsatisfied";
+export interface EvaluationFinding { code: FindingCode; message: string; severity: "error" | "warning"; evidenceSource?: string; }
+export interface RepairAction { id: string; findingCode: FindingCode; description: string; targetPath?: string; }
+export interface Evaluation { accepted: boolean; score: number; findings: EvaluationFinding[]; nextActions: RepairAction[]; }
 export interface Delivery { taskId: string; completedAt: string; summary: string; previewUrl?: string; artifacts: string[]; }
