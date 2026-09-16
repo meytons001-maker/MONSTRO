@@ -7,6 +7,13 @@ export interface ProcessSpec {
   command: string;
   args?: string[];
   timeoutMs?: number;
+  maxOutputBytes?: number;
+}
+
+export interface RuntimePolicy {
+  allowedCommands?: readonly string[];
+  maxTimeoutMs?: number;
+  maxOutputBytes?: number;
 }
 
 export class ProjectWorkspace {
@@ -24,6 +31,7 @@ export class ProjectWorkspace {
   }
 
   async init(): Promise<void> { await mkdir(this.root, { recursive: true }); }
+  async cleanup(): Promise<void> { await rm(this.root, { recursive: true, force: true }); }
 
   async apply(patches: FilePatch[]): Promise<void> {
     await this.init();
@@ -39,15 +47,27 @@ export class ProjectWorkspace {
   async read(path: string): Promise<string> { return readFile(this.safe(path), "utf8"); }
 }
 
-const ALLOWED_COMMANDS = new Set(["node", "npm", "pnpm"]);
+const DEFAULT_ALLOWED_COMMANDS = ["node", "npm", "pnpm"] as const;
+const MIN_TIMEOUT_MS = 100;
+const DEFAULT_MAX_TIMEOUT_MS = 30_000;
+const DEFAULT_MAX_OUTPUT_BYTES = 256 * 1024;
 
 export class LocalSandboxRuntime {
-  constructor(private readonly workspace: ProjectWorkspace) {}
+  private readonly allowedCommands: Set<string>;
+  private readonly maxTimeoutMs: number;
+  private readonly maxOutputBytes: number;
+
+  constructor(private readonly workspace: ProjectWorkspace, policy: RuntimePolicy = {}) {
+    this.allowedCommands = new Set(policy.allowedCommands ?? DEFAULT_ALLOWED_COMMANDS);
+    this.maxTimeoutMs = Math.max(MIN_TIMEOUT_MS, policy.maxTimeoutMs ?? DEFAULT_MAX_TIMEOUT_MS);
+    this.maxOutputBytes = Math.max(1024, policy.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES);
+  }
 
   async run(spec: ProcessSpec): Promise<RuntimeResult> {
-    if (!ALLOWED_COMMANDS.has(spec.command)) throw new Error(`Command is not allowed: ${spec.command}`);
+    if (!this.allowedCommands.has(spec.command)) throw new Error(`Command is not allowed: ${spec.command}`);
     const started = Date.now();
-    const timeoutMs = Math.min(Math.max(spec.timeoutMs ?? 10_000, 100), 30_000);
+    const timeoutMs = Math.min(Math.max(spec.timeoutMs ?? 10_000, MIN_TIMEOUT_MS), this.maxTimeoutMs);
+    const outputLimit = Math.min(Math.max(spec.maxOutputBytes ?? this.maxOutputBytes, 1024), this.maxOutputBytes);
 
     return new Promise((resolveResult) => {
       const child = spawn(spec.command, spec.args ?? [], {
@@ -58,15 +78,44 @@ export class LocalSandboxRuntime {
       });
       let stdout = "";
       let stderr = "";
+      let outputBytes = 0;
       let timedOut = false;
+      let outputExceeded = false;
+      let spawnError: Error | undefined;
+
+      const capture = (target: "stdout" | "stderr", chunk: Buffer | string) => {
+        if (outputExceeded) return;
+        const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk));
+        const remaining = outputLimit - outputBytes;
+        if (remaining <= 0) {
+          outputExceeded = true;
+          child.kill("SIGKILL");
+          return;
+        }
+        const accepted = buffer.subarray(0, remaining);
+        outputBytes += accepted.byteLength;
+        if (target === "stdout") stdout += accepted.toString(); else stderr += accepted.toString();
+        if (accepted.byteLength < buffer.byteLength || outputBytes >= outputLimit) {
+          outputExceeded = true;
+          child.kill("SIGKILL");
+        }
+      };
+
       const timer = setTimeout(() => { timedOut = true; child.kill("SIGKILL"); }, timeoutMs);
-      child.stdout.on("data", (chunk) => { stdout += String(chunk); });
-      child.stderr.on("data", (chunk) => { stderr += String(chunk); });
-      child.on("error", (error) => { stderr += error.message; });
+      child.stdout.on("data", (chunk) => capture("stdout", chunk));
+      child.stderr.on("data", (chunk) => capture("stderr", chunk));
+      child.on("error", (error) => { spawnError = error; });
       child.on("close", (code) => {
         clearTimeout(timer);
+        if (spawnError) stderr += `\n${spawnError.message}`;
         if (timedOut) stderr += `\nProcess timed out after ${timeoutMs}ms`;
-        resolveResult({ ok: code === 0 && !timedOut, stdout, stderr, durationMs: Date.now() - started });
+        if (outputExceeded) stderr += `\nProcess output exceeded ${outputLimit} bytes`;
+        resolveResult({
+          ok: code === 0 && !timedOut && !outputExceeded && !spawnError,
+          stdout,
+          stderr,
+          durationMs: Date.now() - started,
+        });
       });
     });
   }
