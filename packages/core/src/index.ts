@@ -70,7 +70,7 @@ export class MonstroOrchestrator {
         if (runtime.ok && evaluation.accepted) {
           await this.phase(task, "deliver", `score ${evaluation.score}`);
           const delivery = await this.services.exporter.deliver(task, runtime, evaluation);
-          await this.journal.record(task, "mission.completed", delivery.summary);
+          await this.journal.record(task, "mission.completed", delivery.summary, { previewUrl: delivery.previewUrl, artifacts: delivery.artifacts, completedAt: delivery.completedAt });
           return delivery;
         }
 
