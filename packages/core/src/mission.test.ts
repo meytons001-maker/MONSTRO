@@ -17,7 +17,9 @@ const task: MonstroTask = {
 test("MissionJournal stores and publishes immutable snapshots", async () => {
   const journal = new MissionJournal();
   const observed: string[] = [];
-  journal.subscribe((event) => observed.push(event.type));
+  journal.subscribe((event) => {
+    observed.push(event.type);
+  });
 
   await journal.record(task, "phase.changed", "ready");
   const snapshot = journal.snapshot();
