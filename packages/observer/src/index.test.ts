@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { test } from "node:test";
-import { HttpPreviewObserver } from "./index";
+import { HttpPreviewObserver } from "./index.js";
 
 async function serve(body: string) {
   const server = createServer((_req, res) => { res.writeHead(200, { "content-type": "text/html" }); res.end(body); });
