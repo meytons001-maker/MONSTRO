@@ -11,13 +11,20 @@ async function serve(body: string) {
   return { url: `http://127.0.0.1:${address.port}`, close: () => new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve())) };
 }
 
+function evidenceData(value: unknown): Record<string, unknown> {
+  assert.ok(value && typeof value === "object" && !Array.isArray(value), "expected structured evidence data");
+  return value as Record<string, unknown>;
+}
+
 test("observes document metadata as structured evidence", async () => {
   const fixture = await serve("<!doctype html><title>MONSTRO Preview</title><h1>MONSTRO LIVE PREVIEW</h1>");
   try {
     const result = await new HttpPreviewObserver().observe(fixture.url, { ok: true, stdout: "", stderr: "", durationMs: 1 });
     assert.equal(result.ok, true);
     const document = result.evidence.find((item) => item.source === "preview:document");
-    assert.deepEqual(document?.data && { title: document.data.title, h1: document.data.h1 }, { title: "MONSTRO Preview", h1: "MONSTRO LIVE PREVIEW" });
+    assert.ok(document, "expected preview:document evidence");
+    const data = evidenceData(document.data);
+    assert.deepEqual({ title: data.title, h1: data.h1 }, { title: "MONSTRO Preview", h1: "MONSTRO LIVE PREVIEW" });
   } finally { await fixture.close(); }
 });
 
