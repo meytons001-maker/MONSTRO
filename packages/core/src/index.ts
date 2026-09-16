@@ -1,6 +1,6 @@
 import type { BuildPlan, Delivery, Evaluation, Evidence, FilePatch, MonstroTask, ObservationResult, RuntimeResult, TaskPhase } from "@monstro/contracts";
-import { MissionJournal } from "./mission.js";
-export * from "./mission.js";
+import { MissionJournal } from "./mission.ts";
+export * from "./mission.ts";
 
 export interface Inspector { inspect(task: MonstroTask): Promise<Evidence[]>; }
 export interface Architect { plan(task: MonstroTask, evidence: Evidence[]): Promise<BuildPlan>; }
