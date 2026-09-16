@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import type { MonstroTask, RuntimeResult } from "@monstro/contracts";
 import { MissionJournal, MonstroOrchestrator, type MonstroServices } from "@monstro/core";
 import { LocalSandboxRuntime, ProjectWorkspace, type PreviewHandle } from "@monstro/runtime";
+import { previewRegistry } from "./preview-registry";
 
 export function createTask(intent: string): MonstroTask {
   const id = randomUUID();
@@ -40,14 +41,15 @@ export function createV0Services(task: MonstroTask): MonstroServices {
         if (preview) await preview.stop();
         const started = Date.now();
         preview = await sandbox.startPreview({ command: "node", args: ["preview.mjs"], healthPath: "/health", startupTimeoutMs: 5_000 });
-        return { ok: true, previewUrl: preview.url, stdout: preview.stdout, stderr: preview.stderr, durationMs: Date.now() - started };
+        await previewRegistry.register(task.id, preview);
+        return { ok: true, previewUrl: `/api/previews/${task.id}/`, stdout: preview.stdout, stderr: preview.stderr, durationMs: Date.now() - started };
       },
     },
     evaluator: {
       async evaluate(_current, runtime) {
-        if (!runtime.ok || !runtime.previewUrl) return { accepted: false, score: 0, findings: [runtime.stderr || "Preview did not start"], nextActions: ["Repair preview artifact"] };
+        if (!runtime.ok || !preview) return { accepted: false, score: 0, findings: [runtime.stderr || "Preview did not start"], nextActions: ["Repair preview artifact"] };
         try {
-          const response = await fetch(`${runtime.previewUrl}/health`, { signal: AbortSignal.timeout(1_000) });
+          const response = await fetch(`${preview.url}/health`, { signal: AbortSignal.timeout(1_000) });
           const body = await response.json() as { ok?: boolean; engine?: string };
           const accepted = response.ok && body.ok === true && body.engine === "MONSTRO";
           return { accepted, score: accepted ? 1 : 0, findings: accepted ? [] : ["Preview health contract failed"], nextActions: accepted ? [] : ["Repair preview health endpoint"] };
@@ -57,7 +59,7 @@ export function createV0Services(task: MonstroTask): MonstroServices {
       },
     },
     repairer: { async repair() { return []; } },
-    exporter: { async deliver(current, runtime) { return { taskId: current.id, completedAt: new Date().toISOString(), summary: "MONSTRO generated and verified a reachable web preview", previewUrl: runtime.previewUrl, artifacts: ["preview.mjs"] }; } },
+    exporter: { async deliver(current, runtime) { return { taskId: current.id, completedAt: new Date().toISOString(), summary: "MONSTRO generated and verified a reachable web preview through the preview gateway", previewUrl: runtime.previewUrl, artifacts: ["preview.mjs"] }; } },
   };
 }
 
