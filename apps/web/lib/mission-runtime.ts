@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import type { Evidence, EvaluationFinding, FilePatch, MonstroTask, RuntimeResult } from "@monstro/contracts";
+import type { EvaluationFinding, FilePatch, MonstroTask, RuntimeResult } from "@monstro/contracts";
 import { MissionJournal, MonstroOrchestrator, type MonstroServices } from "@monstro/core";
+import { HttpPreviewObserver } from "@monstro/observer";
 import { LocalSandboxRuntime, ProjectWorkspace, type PreviewHandle } from "@monstro/runtime";
 import { previewRegistry } from "./preview-registry";
 
@@ -22,6 +23,7 @@ export function createTask(intent: string): MonstroTask {
 export function createV0Services(task: MonstroTask): MonstroServices {
   const workspace = new ProjectWorkspace(task.context.rootDir, task.context.projectId);
   const sandbox = new LocalSandboxRuntime(workspace, { allowedCommands: ["node"], maxTimeoutMs: 15_000 });
+  const httpObserver = new HttpPreviewObserver({ timeoutMs: 1_500, maxHtmlBytes: 512_000 });
   let preview: PreviewHandle | undefined;
 
   return {
@@ -34,16 +36,8 @@ export function createV0Services(task: MonstroTask): MonstroServices {
     runtime: { async run(): Promise<RuntimeResult> { if (preview) await preview.stop(); const started = Date.now(); preview = await sandbox.startPreview({ command: "node", args: ["preview.mjs"], healthPath: "/health", startupTimeoutMs: 5_000 }); await previewRegistry.register(task.id, preview); return { ok: true, previewUrl: `/api/previews/${task.id}/`, stdout: preview.stdout, stderr: preview.stderr, durationMs: Date.now() - started }; } },
     observer: {
       async observe(_current, runtime) {
-        const started = Date.now(); const evidence: Evidence[] = [];
-        if (!runtime.ok || !preview) return { ok: false, evidence: [{ source: "runtime", kind: "runtime", summary: runtime.stderr || "Preview unavailable" }], durationMs: Date.now() - started };
-        try {
-          const response = await fetch(preview.url, { signal: AbortSignal.timeout(1_500) }); const html = await response.text();
-          const title = html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1]?.trim() ?? "";
-          const h1 = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i)?.[1]?.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim() ?? "";
-          evidence.push({ source: "preview:http", kind: "network", summary: `GET / returned ${response.status}`, data: { status: response.status, contentType: response.headers.get("content-type") } });
-          evidence.push({ source: "preview:document", kind: "runtime", summary: `Document title: ${title || "missing"}`, data: { title, h1, htmlBytes: Buffer.byteLength(html) } });
-          return { ok: response.ok && html.length > 0, evidence, durationMs: Date.now() - started };
-        } catch (error) { return { ok: false, evidence: [{ source: "preview:http", kind: "network", summary: error instanceof Error ? error.message : "Preview observation failed" }], durationMs: Date.now() - started }; }
+        if (!preview) return { ok: false, evidence: [{ source: "runtime", kind: "runtime", summary: runtime.stderr || "Preview unavailable" }], durationMs: 0 };
+        return httpObserver.observe(preview.url, runtime);
       },
     },
     evaluator: {
