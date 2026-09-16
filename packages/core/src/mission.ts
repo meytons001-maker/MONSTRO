@@ -7,6 +7,7 @@ export interface MissionEvent {
   type: "phase.changed" | "iteration.started" | "mission.completed" | "mission.failed";
   timestamp: string;
   detail?: string;
+  data?: Record<string, unknown>;
 }
 
 export type MissionListener = (event: MissionEvent) => void | Promise<void>;
@@ -24,7 +25,7 @@ export class MissionJournal {
     return [...this.events];
   }
 
-  async record(task: MonstroTask, type: MissionEvent["type"], detail?: string): Promise<MissionEvent> {
+  async record(task: MonstroTask, type: MissionEvent["type"], detail?: string, data?: Record<string, unknown>): Promise<MissionEvent> {
     const event: MissionEvent = {
       id: `${task.id}:${this.events.length + 1}`,
       taskId: task.id,
@@ -32,6 +33,7 @@ export class MissionJournal {
       type,
       timestamp: new Date().toISOString(),
       detail,
+      data,
     };
     this.events.push(event);
     await Promise.all([...this.listeners].map((listener) => listener(event)));
