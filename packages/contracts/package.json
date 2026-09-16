@@ -1,0 +1,9 @@
+{
+  "name": "@monstro/contracts",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "scripts": { "typecheck": "tsc --noEmit", "build": "tsc --noEmit", "test": "node --test" },
+  "devDependencies": { "typescript": "^5.7.2" }
+}
