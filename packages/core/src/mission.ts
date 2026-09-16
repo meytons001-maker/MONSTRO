@@ -1,10 +1,18 @@
 import type { MonstroTask, TaskPhase } from "@monstro/contracts";
 
+export type MissionEventType =
+  | "phase.changed"
+  | "iteration.started"
+  | "observation.completed"
+  | "repair.completed"
+  | "mission.completed"
+  | "mission.failed";
+
 export interface MissionEvent {
   id: string;
   taskId: string;
   phase: TaskPhase;
-  type: "phase.changed" | "iteration.started" | "mission.completed" | "mission.failed";
+  type: MissionEventType;
   timestamp: string;
   detail?: string;
   data?: Record<string, unknown>;
@@ -25,7 +33,7 @@ export class MissionJournal {
     return [...this.events];
   }
 
-  async record(task: MonstroTask, type: MissionEvent["type"], detail?: string, data?: Record<string, unknown>): Promise<MissionEvent> {
+  async record(task: MonstroTask, type: MissionEventType, detail?: string, data?: Record<string, unknown>): Promise<MissionEvent> {
     const event: MissionEvent = {
       id: `${task.id}:${this.events.length + 1}`,
       taskId: task.id,
