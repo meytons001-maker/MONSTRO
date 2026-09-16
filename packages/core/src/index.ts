@@ -10,7 +10,6 @@ export interface Observer { observe(task: MonstroTask, runtime: RuntimeResult): 
 export interface Evaluator { evaluate(task: MonstroTask, runtime: RuntimeResult, evidence: Evidence[]): Promise<Evaluation>; }
 export interface Repairer { repair(task: MonstroTask, evaluation: Evaluation): Promise<FilePatch[]>; }
 export interface Exporter { deliver(task: MonstroTask, runtime: RuntimeResult, evaluation: Evaluation): Promise<Delivery>; }
-
 export interface MonstroServices { inspector: Inspector; architect: Architect; builder: Builder; runtime: Runtime; observer: Observer; evaluator: Evaluator; repairer: Repairer; exporter: Exporter; }
 
 export class MonstroOrchestrator {
@@ -44,8 +43,11 @@ export class MonstroOrchestrator {
           await this.journal.record(task, "mission.completed", delivery.summary, { previewUrl: delivery.previewUrl, artifacts: delivery.artifacts, completedAt: delivery.completedAt });
           return delivery;
         }
-        await this.phase(task, "repair", evaluation.findings.join("; "));
+
+        const repairDetail = evaluation.findings.map((finding) => `${finding.code}: ${finding.message}`).join("; ");
+        await this.phase(task, "repair", repairDetail);
         const patches = await this.services.repairer.repair(task, evaluation);
+        await this.journal.record(task, "repair.completed", `${patches.length} patch(es)`, { actions: evaluation.nextActions.map((action) => action.id), paths: patches.map((patch) => patch.path) });
         if (patches.length === 0) break;
         await this.services.builder.apply(task, patches);
       }
