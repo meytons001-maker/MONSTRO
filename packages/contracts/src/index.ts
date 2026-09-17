@@ -20,7 +20,14 @@ export type Capability =
   | "code.analyze"
   | "security.authorized-analysis";
 
-export interface AcceptanceCriterion { id: string; description: string; required: boolean; }
+export type AcceptanceCheck =
+  | { kind: "runtime.ok" }
+  | { kind: "evidence.exists"; source: string }
+  | { kind: "evidence.field.equals"; source: string; field: string; expected: string | number | boolean }
+  | { kind: "evidence.field.includes"; source: string; field: string; expected: string }
+  | { kind: "evidence.field.min"; source: string; field: string; expected: number };
+
+export interface AcceptanceCriterion { id: string; description: string; required: boolean; checks?: AcceptanceCheck[]; repairTargetPath?: string; }
 export interface ProjectContext { projectId: string; rootDir: string; summary: string; decisions: string[]; }
 export interface MonstroTask { id: string; intent: string; phase: TaskPhase; context: ProjectContext; requestedCapabilities: Capability[]; acceptance: AcceptanceCriterion[]; iteration: number; maxIterations: number; }
 export interface Evidence { source: string; kind: "code" | "runtime" | "visual" | "network" | "user"; summary: string; data?: unknown; }
