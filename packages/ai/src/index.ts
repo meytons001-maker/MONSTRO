@@ -62,3 +62,4 @@ export class ModelRouter {
 }
 
 export { OpenAiCompatibleProvider, type OpenAiCompatibleProviderOptions } from "./openai-compatible.js";
+export { createModelRouterFromEnvironment, type AiEnvironment } from "./config.js";
