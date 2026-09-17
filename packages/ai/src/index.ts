@@ -65,3 +65,4 @@ export { OpenAiCompatibleProvider, type OpenAiCompatibleProviderOptions } from "
 export { createModelRouterFromEnvironment, type AiEnvironment } from "./config.ts";
 export { generateAiPlan, type AiPlan, type AiPlanStep } from "./planner.ts";
 export { generateAiBuild, type AiBuildResult } from "./builder.ts";
+export { generateAiRepair, type AiRepairArtifact, type AiRepairResult } from "./repairer.ts";
