@@ -47,12 +47,9 @@ export class ModelRouter {
     if (request.preferredProvider) {
       const preferred = this.providers.get(request.preferredProvider);
       if (!preferred) throw new AiRoutingError(`Unknown AI provider: ${request.preferredProvider}`);
-      if (!preferred.capabilities.has(request.capability)) {
-        throw new AiRoutingError(`AI provider ${preferred.id} does not support ${request.capability}`);
-      }
+      if (!preferred.capabilities.has(request.capability)) throw new AiRoutingError(`AI provider ${preferred.id} does not support ${request.capability}`);
       return preferred;
     }
-
     const provider = this.list(request.capability)[0];
     if (!provider) throw new AiRoutingError(`No AI provider supports ${request.capability}`);
     return provider;
@@ -63,3 +60,5 @@ export class ModelRouter {
     return this.resolve(request).generate(request);
   }
 }
+
+export { OpenAiCompatibleProvider, type OpenAiCompatibleProviderOptions } from "./openai-compatible.js";
