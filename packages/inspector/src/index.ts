@@ -1,10 +1,26 @@
+import { isIP } from "node:net";
+import { lookup } from "node:dns/promises";
 import type { Evidence } from "@monstro/contracts";
 
-export interface PublicUrlInspectorOptions { timeoutMs?: number; maxHtmlBytes?: number; maxAssets?: number; fetchImpl?: typeof fetch; }
+export type AddressResolver = (hostname: string) => Promise<Array<{ address: string; family: number }>>;
+export interface PublicUrlInspectorOptions { timeoutMs?: number; maxHtmlBytes?: number; maxAssets?: number; fetchImpl?: typeof fetch; resolveImpl?: AddressResolver; }
 
 const PRIVATE_HOST = /^(localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|::1|10(?:\.\d{1,3}){3}|192\.168(?:\.\d{1,3}){2}|169\.254(?:\.\d{1,3}){2}|172\.(?:1[6-9]|2\d|3[01])(?:\.\d{1,3}){2})$/i;
 const ASSET_ATTR = /<(script|link|img|source)\b[^>]*?\b(src|href)=["']([^"']+)["'][^>]*>/gi;
 const INTERACTIVE_ASSET = /\.(?:glb|gltf|bin|hdr|exr|ktx2|basis|wasm)$/i;
+
+function isPrivateAddress(address: string): boolean {
+  if (PRIVATE_HOST.test(address)) return true;
+  if (isIP(address) === 6) {
+    const value = address.toLowerCase();
+    return value === "::" || value === "::1" || value.startsWith("fc") || value.startsWith("fd") || /^fe[89ab]/.test(value) || value.startsWith("::ffff:127.") || value.startsWith("::ffff:10.") || value.startsWith("::ffff:192.168.") || /^::ffff:172\.(?:1[6-9]|2\d|3[01])\./.test(value);
+  }
+  return false;
+}
+
+async function defaultResolve(hostname: string): Promise<Array<{ address: string; family: number }>> {
+  return lookup(hostname, { all: true, verbatim: true });
+}
 
 export function extractPublicHttpUrl(intent: string): URL | undefined {
   const match = intent.match(/https?:\/\/[^\s<>'"`]+/i);
@@ -13,6 +29,17 @@ export function extractPublicHttpUrl(intent: string): URL | undefined {
   try { url = new URL(match[0].replace(/[),.;]+$/, "")); } catch { return undefined; }
   if (!/^https?:$/.test(url.protocol) || url.username || url.password || PRIVATE_HOST.test(url.hostname)) return undefined;
   return url;
+}
+
+export async function assertPublicDestination(url: URL, resolveImpl: AddressResolver = defaultResolve): Promise<void> {
+  if (!/^https?:$/.test(url.protocol) || url.username || url.password || PRIVATE_HOST.test(url.hostname)) throw new Error("Public inspection target is not allowed");
+  if (isIP(url.hostname)) {
+    if (isPrivateAddress(url.hostname)) throw new Error("Public inspection target resolves to a private address");
+    return;
+  }
+  const addresses = await resolveImpl(url.hostname);
+  if (addresses.length === 0) throw new Error("Public inspection target did not resolve");
+  if (addresses.some(({ address }) => isPrivateAddress(address))) throw new Error("Public inspection target resolves to a private address");
 }
 
 function textMatch(html: string, expression: RegExp): string | undefined {
@@ -52,15 +79,18 @@ export class PublicUrlInspector {
   private readonly maxHtmlBytes: number;
   private readonly maxAssets: number;
   private readonly fetchImpl: typeof fetch;
+  private readonly resolveImpl: AddressResolver;
 
   constructor(options: PublicUrlInspectorOptions = {}) {
     this.timeoutMs = options.timeoutMs ?? 5_000;
     this.maxHtmlBytes = options.maxHtmlBytes ?? 512_000;
     this.maxAssets = options.maxAssets ?? 64;
     this.fetchImpl = options.fetchImpl ?? fetch;
+    this.resolveImpl = options.resolveImpl ?? defaultResolve;
   }
 
   async inspect(url: URL): Promise<Evidence[]> {
+    await assertPublicDestination(url, this.resolveImpl);
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
