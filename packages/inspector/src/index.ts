@@ -1,8 +1,9 @@
 import type { Evidence } from "@monstro/contracts";
 
-export interface PublicUrlInspectorOptions { timeoutMs?: number; maxHtmlBytes?: number; fetchImpl?: typeof fetch; }
+export interface PublicUrlInspectorOptions { timeoutMs?: number; maxHtmlBytes?: number; maxAssets?: number; fetchImpl?: typeof fetch; }
 
 const PRIVATE_HOST = /^(localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|::1|10(?:\.\d{1,3}){3}|192\.168(?:\.\d{1,3}){2}|169\.254(?:\.\d{1,3}){2}|172\.(?:1[6-9]|2\d|3[01])(?:\.\d{1,3}){2})$/i;
+const ASSET_ATTR = /<(script|link|img|source)\b[^>]*?\b(src|href)=["']([^"']+)["'][^>]*>/gi;
 
 export function extractPublicHttpUrl(intent: string): URL | undefined {
   const match = intent.match(/https?:\/\/[^\s<>'"`]+/i);
@@ -18,14 +19,43 @@ function textMatch(html: string, expression: RegExp): string | undefined {
   return value || undefined;
 }
 
+function assetKind(tag: string, rawUrl: string): string {
+  if (tag === "script") return "script";
+  if (tag === "img" || tag === "source") return "media";
+  const pathname = rawUrl.split(/[?#]/, 1)[0]?.toLowerCase() ?? "";
+  if (pathname.endsWith(".css")) return "stylesheet";
+  if (/\.(?:glb|gltf|bin|hdr|exr|ktx2|basis|wasm)$/i.test(pathname)) return "interactive";
+  return "resource";
+}
+
+export function inventoryClientAssets(html: string, baseUrl: URL, maxAssets = 64): Array<{ kind: string; url: string; sameOrigin: boolean }> {
+  const assets: Array<{ kind: string; url: string; sameOrigin: boolean }> = [];
+  const seen = new Set<string>();
+  for (const match of html.matchAll(ASSET_ATTR)) {
+    if (assets.length >= maxAssets) break;
+    const raw = match[3];
+    if (!raw || raw.startsWith("data:") || raw.startsWith("javascript:")) continue;
+    let resolved: URL;
+    try { resolved = new URL(raw, baseUrl); } catch { continue; }
+    if (!/^https?:$/.test(resolved.protocol) || resolved.username || resolved.password || PRIVATE_HOST.test(resolved.hostname)) continue;
+    const value = resolved.toString();
+    if (seen.has(value)) continue;
+    seen.add(value);
+    assets.push({ kind: assetKind(match[1]?.toLowerCase() ?? "", value), url: value, sameOrigin: resolved.origin === baseUrl.origin });
+  }
+  return assets;
+}
+
 export class PublicUrlInspector {
   private readonly timeoutMs: number;
   private readonly maxHtmlBytes: number;
+  private readonly maxAssets: number;
   private readonly fetchImpl: typeof fetch;
 
   constructor(options: PublicUrlInspectorOptions = {}) {
     this.timeoutMs = options.timeoutMs ?? 5_000;
     this.maxHtmlBytes = options.maxHtmlBytes ?? 512_000;
+    this.maxAssets = options.maxAssets ?? 64;
     this.fetchImpl = options.fetchImpl ?? fetch;
   }
 
@@ -40,15 +70,19 @@ export class PublicUrlInspector {
       const declared = Number(response.headers.get("content-length") ?? "0");
       if (declared > this.maxHtmlBytes) throw new Error("Public HTML exceeds inspection budget");
       const html = await response.text();
-      if (Buffer.byteLength(html, "utf8") > this.maxHtmlBytes) throw new Error("Public HTML exceeds inspection budget");
+      const bytes = Buffer.byteLength(html, "utf8");
+      if (bytes > this.maxHtmlBytes) throw new Error("Public HTML exceeds inspection budget");
       const title = textMatch(html, /<title[^>]*>([\s\S]*?)<\/title>/i);
       const h1 = textMatch(html, /<h1[^>]*>([\s\S]*?)<\/h1>/i);
       const scripts = (html.match(/<script\b/gi) ?? []).length;
       const styles = (html.match(/<(?:style\b|link\b[^>]*rel=["']?stylesheet)/gi) ?? []).length;
       const images = (html.match(/<img\b/gi) ?? []).length;
+      const assets = inventoryClientAssets(html, url, this.maxAssets);
+      const interactiveAssets = assets.filter((asset) => asset.kind === "interactive").length;
       return [
-        { source: "reference:http", kind: "network", summary: `Public reference responded ${response.status}`, data: { url: url.toString(), status: response.status, contentType: type, bytes: Buffer.byteLength(html, "utf8") } },
+        { source: "reference:http", kind: "network", summary: `Public reference responded ${response.status}`, data: { url: url.toString(), status: response.status, contentType: type, bytes } },
         { source: "reference:document", kind: "visual", summary: `Public reference document${title ? `: ${title}` : ""}`, data: { title, h1, scripts, styles, images } },
+        { source: "reference:assets", kind: "network", summary: `Observed ${assets.length} public client asset(s)${interactiveAssets ? `, including ${interactiveAssets} interactive/3D candidate(s)` : ""}`, data: { assets, truncated: assets.length >= this.maxAssets, interactiveAssets } },
       ];
     } finally { clearTimeout(timer); }
   }
