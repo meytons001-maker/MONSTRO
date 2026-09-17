@@ -1,5 +1,5 @@
-import { ModelRouter, type AiCapability } from "./index.js";
-import { OpenAiCompatibleProvider } from "./openai-compatible.js";
+import { ModelRouter, type AiCapability } from "./index.ts";
+import { OpenAiCompatibleProvider } from "./openai-compatible.ts";
 
 export interface AiEnvironment {
   MONSTRO_AI_BASE_URL?: string;
