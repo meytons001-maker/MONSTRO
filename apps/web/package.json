@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@monstro/ai": "workspace:*",
+    "@monstro/browser": "workspace:*",
     "@monstro/contracts": "workspace:*",
     "@monstro/core": "workspace:*",
     "@monstro/evaluator": "workspace:*",
