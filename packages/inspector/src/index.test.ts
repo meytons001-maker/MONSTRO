@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { PublicUrlInspector, assertPublicDestination, extractPublicHttpUrl, inventoryClientAssets, profileWebExperience } from "./index.ts";
+import { ControlledBrowserInspector, PublicUrlInspector, assertPublicDestination, extractPublicHttpUrl, inventoryClientAssets, profileWebExperience, type BrowserSession } from "./index.ts";
 
 const publicResolver = async () => [{ address: "93.184.216.34", family: 4 }];
 
@@ -49,6 +49,22 @@ test("produces bounded document, network, asset and experience evidence", async 
   assert.deepEqual(evidence[1]?.data, { title: "Reference", h1: "World", scripts: 1, styles: 0, images: 1 });
   const assetData = evidence[2]?.data as { assets: unknown[]; interactiveAssets: number }; assert.equal(assetData.assets.length, 3); assert.equal(assetData.interactiveAssets, 1);
   const experience = evidence[3]?.data as { canvasCount: number; technologies: string[] }; assert.equal(experience.canvasCount, 1); assert.ok(experience.technologies.includes("three.js"));
+});
+
+test("controlled browser inspector emits rendered, network and runtime evidence", async () => {
+  let closed = false;
+  const session: BrowserSession = { async navigate() { return { url: "https://example.com/app", title: "Rendered", h1: "Scene", canvasCount: 2, headings: 3, console: [{ level: "info", text: "ready" }], requests: [{ url: "https://example.com/app.js", method: "GET", resourceType: "script", status: 200 }, { url: "http://127.0.0.1/private", method: "GET" }], runtimeErrors: [] }; }, async close() { closed = true; } };
+  const inspector = new ControlledBrowserInspector({ createSession: async () => session, resolveImpl: publicResolver });
+  const evidence = await inspector.inspect(new URL("https://example.com"));
+  assert.equal(evidence.length, 3); assert.equal(evidence[0]?.source, "browser:document");
+  const network = evidence[1]?.data as { requests: unknown[] }; assert.equal(network.requests.length, 1);
+  assert.equal(evidence[2]?.source, "browser:console"); assert.equal(closed, true);
+});
+
+test("controlled browser inspector closes sessions after navigation failure", async () => {
+  let closed = false; const session: BrowserSession = { async navigate() { throw new Error("navigation failed"); }, async close() { closed = true; } };
+  const inspector = new ControlledBrowserInspector({ createSession: async () => session, resolveImpl: publicResolver });
+  await assert.rejects(() => inspector.inspect(new URL("https://example.com")), /navigation failed/); assert.equal(closed, true);
 });
 
 test("rejects redirects, non HTML responses and oversized documents", async () => {
