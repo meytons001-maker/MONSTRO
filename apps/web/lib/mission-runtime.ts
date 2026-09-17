@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { createModelRouterFromEnvironment, generateAiPlan } from "@monstro/ai";
 import type { EvaluationFinding, FilePatch, MonstroTask, RuntimeResult } from "@monstro/contracts";
 import { MissionJournal, MonstroOrchestrator, type MonstroServices } from "@monstro/core";
 import { HttpPreviewObserver } from "@monstro/observer";
@@ -28,11 +29,25 @@ export function createV0Services(task: MonstroTask): MonstroServices {
   const workspace = new ProjectWorkspace(task.context.rootDir, task.context.projectId);
   const sandbox = new LocalSandboxRuntime(workspace, { allowedCommands: ["node"], maxTimeoutMs: 15_000 });
   const httpObserver = new HttpPreviewObserver({ timeoutMs: 1_500, maxHtmlBytes: 512_000 });
+  const ai = createModelRouterFromEnvironment();
   let preview: PreviewHandle | undefined;
 
   return {
     inspector: { async inspect(current) { return [{ source: "intent", kind: "user", summary: current.intent }]; } },
-    architect: { async plan(current, evidence) { return { taskId: current.id, rationale: `Plan derived from ${evidence.length} evidence item(s)`, steps: [{ id: "v0-web", title: "Build reachable web preview", description: current.intent, status: "pending" }] }; } },
+    architect: {
+      async plan(current, evidence) {
+        try {
+          const aiPlan = await generateAiPlan(ai, current.intent, evidence.map((item) => `${item.source}: ${item.summary}`));
+          if (aiPlan) {
+            current.context.decisions.push(`AI Architect planned with ${aiPlan.provider}/${aiPlan.model}`);
+            return { taskId: current.id, rationale: aiPlan.rationale, steps: aiPlan.steps.map((step, index) => ({ id: `ai-${index + 1}`, title: step.title, description: step.description, status: "pending" as const })) };
+          }
+        } catch (error) {
+          current.context.decisions.push(`AI Architect unavailable; deterministic fallback used: ${error instanceof Error ? error.message : "unknown error"}`);
+        }
+        return { taskId: current.id, rationale: `Deterministic plan derived from ${evidence.length} evidence item(s)`, steps: [{ id: "v0-web", title: "Build reachable web preview", description: current.intent, status: "pending" }] };
+      },
+    },
     builder: {
       async build(current) { return [{ path: "preview.mjs", operation: "create", content: previewServer(current.intent) }]; },
       async apply(current, patches) { await workspace.apply(patches); current.context.decisions.push(`Applied ${patches.length} patch(es) to isolated workspace`); },
@@ -61,9 +76,7 @@ export function createV0Services(task: MonstroTask): MonstroServices {
         const domData = structuredData(dom?.data);
         const mainCount = typeof domData?.main === "number" ? domData.main : 0;
         const headingCount = typeof domData?.headings === "number" ? domData.headings : 0;
-        if (!dom || mainCount < 1 || headingCount < 1) {
-          findings.push({ code: "document.structure", message: "Preview must contain at least one main landmark and one heading", severity: "error", evidenceSource: "preview:dom" });
-        }
+        if (!dom || mainCount < 1 || headingCount < 1) findings.push({ code: "document.structure", message: "Preview must contain at least one main landmark and one heading", severity: "error", evidenceSource: "preview:dom" });
 
         const repairable = new Set(["document.title", "document.heading", "document.structure"]);
         const nextActions = findings.filter((finding) => repairable.has(finding.code)).map((finding) => ({ id: `repair-${finding.code}`, findingCode: finding.code, description: `Repair ${finding.code}`, targetPath: "preview.mjs" }));
