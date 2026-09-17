@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { PublicUrlInspector, assertPublicDestination, extractPublicHttpUrl, inventoryClientAssets } from "./index.ts";
+import { PublicUrlInspector, assertPublicDestination, extractPublicHttpUrl, inventoryClientAssets, profileWebExperience } from "./index.ts";
 
 const publicResolver = async () => [{ address: "93.184.216.34", family: 4 }];
 
@@ -26,26 +26,33 @@ test("inventories bounded public client assets without fetching them", () => {
     { kind: "media", url: "https://cdn.example.org/hero.webp", sameOrigin: false },
   ]);
   const interactive = inventoryClientAssets(`<source src="/scene.glb"><link href="/env.hdr">`, new URL("https://example.com"));
-  assert.equal(interactive[0]?.kind, "interactive");
-  assert.equal(interactive[1]?.kind, "interactive");
+  assert.equal(interactive[0]?.kind, "interactive"); assert.equal(interactive[1]?.kind, "interactive");
 });
 
-test("produces bounded document, network and asset evidence", async () => {
-  const inspector = new PublicUrlInspector({ resolveImpl: publicResolver, fetchImpl: async () => new Response("<!doctype html><title>Reference</title><h1>World</h1><script src='/app.js'></script><img src='x'><source src='/scene.glb'>", { status: 200, headers: { "content-type": "text/html" } }) });
+test("profiles observable interactive and 3D technology signals", () => {
+  const html = `<canvas id="scene"></canvas><script type="module" src="/three.min.js"></script><script>const gl = canvas.getContext('webgl2')</script><source src="/car.glb">`;
+  const assets = inventoryClientAssets(html, new URL("https://example.com"));
+  const profile = profileWebExperience(html, assets);
+  assert.equal(profile.canvasCount, 1); assert.equal(profile.moduleScripts, 1); assert.equal(profile.interactiveAssets, 1);
+  assert.ok(profile.technologies.includes("three.js")); assert.ok(profile.signals.includes("WebGL API reference"));
+});
+
+test("profiles known declarative 3D engines without claiming runtime execution", () => {
+  const profile = profileWebExperience(`<a-scene></a-scene><model-viewer src="x.glb"></model-viewer>`, []);
+  assert.ok(profile.technologies.includes("aframe")); assert.ok(profile.technologies.includes("model-viewer"));
+});
+
+test("produces bounded document, network, asset and experience evidence", async () => {
+  const inspector = new PublicUrlInspector({ resolveImpl: publicResolver, fetchImpl: async () => new Response("<!doctype html><title>Reference</title><h1>World</h1><canvas></canvas><script type='module' src='/three.js'></script><img src='x'><source src='/scene.glb'>", { status: 200, headers: { "content-type": "text/html" } }) });
   const evidence = await inspector.inspect(new URL("https://example.com"));
-  assert.equal(evidence.length, 3);
-  assert.equal(evidence[0]?.source, "reference:http");
+  assert.equal(evidence.length, 4); assert.equal(evidence[0]?.source, "reference:http");
   assert.deepEqual(evidence[1]?.data, { title: "Reference", h1: "World", scripts: 1, styles: 0, images: 1 });
-  const assetData = evidence[2]?.data as { assets: unknown[]; interactiveAssets: number };
-  assert.equal(assetData.assets.length, 3);
-  assert.equal(assetData.interactiveAssets, 1);
+  const assetData = evidence[2]?.data as { assets: unknown[]; interactiveAssets: number }; assert.equal(assetData.assets.length, 3); assert.equal(assetData.interactiveAssets, 1);
+  const experience = evidence[3]?.data as { canvasCount: number; technologies: string[] }; assert.equal(experience.canvasCount, 1); assert.ok(experience.technologies.includes("three.js"));
 });
 
 test("rejects redirects, non HTML responses and oversized documents", async () => {
-  const redirect = new PublicUrlInspector({ resolveImpl: publicResolver, fetchImpl: async () => new Response("", { status: 302 }) });
-  await assert.rejects(() => redirect.inspect(new URL("https://example.com")));
-  const json = new PublicUrlInspector({ resolveImpl: publicResolver, fetchImpl: async () => new Response("{}", { headers: { "content-type": "application/json" } }) });
-  await assert.rejects(() => json.inspect(new URL("https://example.com")), /not an HTML/);
-  const huge = new PublicUrlInspector({ maxHtmlBytes: 4, resolveImpl: publicResolver, fetchImpl: async () => new Response("12345", { headers: { "content-type": "text/html" } }) });
-  await assert.rejects(() => huge.inspect(new URL("https://example.com")), /exceeds inspection budget/);
+  const redirect = new PublicUrlInspector({ resolveImpl: publicResolver, fetchImpl: async () => new Response("", { status: 302 }) }); await assert.rejects(() => redirect.inspect(new URL("https://example.com")));
+  const json = new PublicUrlInspector({ resolveImpl: publicResolver, fetchImpl: async () => new Response("{}", { headers: { "content-type": "application/json" } }) }); await assert.rejects(() => json.inspect(new URL("https://example.com")), /not an HTML/);
+  const huge = new PublicUrlInspector({ maxHtmlBytes: 4, resolveImpl: publicResolver, fetchImpl: async () => new Response("12345", { headers: { "content-type": "text/html" } }) }); await assert.rejects(() => huge.inspect(new URL("https://example.com")), /exceeds inspection budget/);
 });
