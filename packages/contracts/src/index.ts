@@ -31,7 +31,7 @@ export interface RuntimeResult { ok: boolean; previewUrl?: string; stdout: strin
 
 export interface ObservationResult { ok: boolean; evidence: Evidence[]; durationMs: number; }
 
-export type FindingCode = "runtime.failed" | "observation.failed" | "document.title" | "document.heading" | "acceptance.unsatisfied";
+export type FindingCode = "runtime.failed" | "observation.failed" | "document.title" | "document.heading" | "document.structure" | "acceptance.unsatisfied";
 export interface EvaluationFinding { code: FindingCode; message: string; severity: "error" | "warning"; evidenceSource?: string; }
 export interface RepairAction { id: string; findingCode: FindingCode; description: string; targetPath?: string; }
 export interface Evaluation { accepted: boolean; score: number; findings: EvaluationFinding[]; nextActions: RepairAction[]; }
