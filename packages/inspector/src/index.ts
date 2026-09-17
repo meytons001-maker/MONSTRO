@@ -6,6 +6,12 @@ export type AddressResolver = (hostname: string) => Promise<Array<{ address: str
 export interface PublicUrlInspectorOptions { timeoutMs?: number; maxHtmlBytes?: number; maxAssets?: number; fetchImpl?: typeof fetch; resolveImpl?: AddressResolver; }
 export interface ClientAsset { kind: string; url: string; sameOrigin: boolean; }
 export interface ExperienceProfile { canvasCount: number; moduleScripts: number; technologies: string[]; interactiveAssets: number; signals: string[]; }
+export interface BrowserConsoleEntry { level: "log" | "info" | "warn" | "error"; text: string; }
+export interface BrowserRequestEntry { url: string; method: string; resourceType?: string; status?: number; }
+export interface BrowserSnapshot { url: string; title?: string; h1?: string; html?: string; canvasCount: number; headings: number; console: BrowserConsoleEntry[]; requests: BrowserRequestEntry[]; runtimeErrors: string[]; }
+export interface BrowserSession { navigate(url: string, options: { timeoutMs: number }): Promise<BrowserSnapshot>; close(): Promise<void>; }
+export type BrowserSessionFactory = () => Promise<BrowserSession>;
+export interface BrowserInspectorOptions { createSession: BrowserSessionFactory; timeoutMs?: number; maxRequests?: number; maxConsoleEntries?: number; resolveImpl?: AddressResolver; }
 
 const PRIVATE_HOST = /^(localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|::1|10(?:\.\d{1,3}){3}|192\.168(?:\.\d{1,3}){2}|169\.254(?:\.\d{1,3}){2}|172\.(?:1[6-9]|2\d|3[01])(?:\.\d{1,3}){2})$/i;
 const ASSET_ATTR = /<(script|link|img|source)\b[^>]*?\b(src|href)=["']([^"']+)["'][^>]*>/gi;
@@ -50,6 +56,27 @@ export function profileWebExperience(html: string, assets: ClientAsset[]): Exper
   if (interactiveAssets > 0) signals.push(`${interactiveAssets} interactive/3D asset candidate(s)`);
   if (moduleScripts > 0) signals.push(`${moduleScripts} ES module script(s)`);
   return { canvasCount, moduleScripts, technologies: [...technologies], interactiveAssets, signals };
+}
+
+export class ControlledBrowserInspector {
+  private readonly timeoutMs: number; private readonly maxRequests: number; private readonly maxConsoleEntries: number; private readonly createSession: BrowserSessionFactory; private readonly resolveImpl: AddressResolver;
+  constructor(options: BrowserInspectorOptions) { this.createSession = options.createSession; this.timeoutMs = options.timeoutMs ?? 8_000; this.maxRequests = options.maxRequests ?? 128; this.maxConsoleEntries = options.maxConsoleEntries ?? 64; this.resolveImpl = options.resolveImpl ?? defaultResolve; }
+  async inspect(url: URL): Promise<Evidence[]> {
+    await assertPublicDestination(url, this.resolveImpl);
+    const session = await this.createSession();
+    try {
+      const snapshot = await session.navigate(url.toString(), { timeoutMs: this.timeoutMs });
+      const finalUrl = new URL(snapshot.url); await assertPublicDestination(finalUrl, this.resolveImpl);
+      const requests: BrowserRequestEntry[] = [];
+      for (const request of snapshot.requests) { if (requests.length >= this.maxRequests) break; let requestUrl: URL; try { requestUrl = new URL(request.url); } catch { continue; } try { await assertPublicDestination(requestUrl, this.resolveImpl); } catch { continue; } requests.push(request); }
+      const consoleEntries = snapshot.console.slice(0, this.maxConsoleEntries); const errors = snapshot.runtimeErrors.slice(0, this.maxConsoleEntries);
+      return [
+        { source: "browser:document", kind: "visual", summary: `Rendered document${snapshot.title ? `: ${snapshot.title}` : ""}`, data: { url: finalUrl.toString(), title: snapshot.title, h1: snapshot.h1, canvasCount: snapshot.canvasCount, headings: snapshot.headings } },
+        { source: "browser:network", kind: "network", summary: `Observed ${requests.length} public browser request(s)`, data: { requests, truncated: snapshot.requests.length > requests.length } },
+        { source: "browser:console", kind: "runtime", summary: errors.length ? `Rendered page reported ${errors.length} runtime error(s)` : `Observed ${consoleEntries.length} console entr${consoleEntries.length === 1 ? "y" : "ies"} without runtime errors`, data: { entries: consoleEntries, runtimeErrors: errors, truncated: snapshot.console.length > consoleEntries.length || snapshot.runtimeErrors.length > errors.length } },
+      ];
+    } finally { await session.close(); }
+  }
 }
 
 export class PublicUrlInspector {
