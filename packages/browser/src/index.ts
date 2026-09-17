@@ -1,11 +1,12 @@
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright-core";
-import type { BrowserConsoleEntry, BrowserRequestEntry, BrowserSession, BrowserSessionFactory, BrowserSnapshot } from "@monstro/inspector";
+import { assertPublicDestination, type AddressResolver, type BrowserConsoleEntry, type BrowserRequestEntry, type BrowserSession, type BrowserSessionFactory, type BrowserSnapshot } from "@monstro/inspector";
 
 export interface ChromiumSessionOptions {
   executablePath: string;
   maxRequests?: number;
   maxConsoleEntries?: number;
   viewport?: { width: number; height: number };
+  resolveImpl?: AddressResolver;
 }
 
 function consoleLevel(type: string): BrowserConsoleEntry["level"] {
@@ -17,7 +18,7 @@ function consoleLevel(type: string): BrowserConsoleEntry["level"] {
 
 class PlaywrightChromiumSession implements BrowserSession {
   private closed = false;
-  constructor(private readonly browser: Browser, private readonly context: BrowserContext, private readonly page: Page, private readonly maxRequests: number, private readonly maxConsoleEntries: number) {}
+  constructor(private readonly browser: Browser, private readonly context: BrowserContext, private readonly page: Page, private readonly maxRequests: number, private readonly maxConsoleEntries: number, private readonly resolveImpl?: AddressResolver) {}
 
   async navigate(url: string, options: { timeoutMs: number }): Promise<BrowserSnapshot> {
     const requests: BrowserRequestEntry[] = [];
@@ -25,6 +26,13 @@ class PlaywrightChromiumSession implements BrowserSession {
     const runtimeErrors: string[] = [];
     const responseStatus = new Map<string, number>();
 
+    await this.page.route("**/*", async (route) => {
+      const requestUrl = route.request().url();
+      let parsed: URL;
+      try { parsed = new URL(requestUrl); } catch { await route.abort("blockedbyclient"); return; }
+      if (!/^https?:$/.test(parsed.protocol)) { if (["data:", "blob:", "about:"].includes(parsed.protocol)) await route.continue(); else await route.abort("blockedbyclient"); return; }
+      try { await assertPublicDestination(parsed, this.resolveImpl); await route.continue(); } catch { await route.abort("blockedbyclient"); }
+    });
     this.page.on("response", (response) => { if (responseStatus.size < this.maxRequests * 2) responseStatus.set(response.url(), response.status()); });
     this.page.on("request", (request) => {
       if (requests.length >= this.maxRequests) return;
@@ -63,6 +71,6 @@ export function createChromiumSessionFactory(options: ChromiumSessionOptions): B
     const browser = await chromium.launch({ executablePath: options.executablePath, headless: true, args: ["--disable-dev-shm-usage"] });
     const context = await browser.newContext({ viewport, serviceWorkers: "block" });
     const page = await context.newPage();
-    return new PlaywrightChromiumSession(browser, context, page, maxRequests, maxConsoleEntries);
+    return new PlaywrightChromiumSession(browser, context, page, maxRequests, maxConsoleEntries, options.resolveImpl);
   };
 }
