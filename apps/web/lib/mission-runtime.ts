@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { createModelRouterFromEnvironment, generateAiPlan } from "@monstro/ai";
-import type { EvaluationFinding, FilePatch, MonstroTask, RuntimeResult } from "@monstro/contracts";
+import { createModelRouterFromEnvironment, generateAiBuild, generateAiPlan } from "@monstro/ai";
+import type { BuildPlan, EvaluationFinding, FilePatch, MonstroTask, RuntimeResult } from "@monstro/contracts";
 import { MissionJournal, MonstroOrchestrator, type MonstroServices } from "@monstro/core";
 import { HttpPreviewObserver } from "@monstro/observer";
 import { LocalSandboxRuntime, ProjectWorkspace, type PreviewHandle } from "@monstro/runtime";
@@ -49,7 +49,20 @@ export function createV0Services(task: MonstroTask): MonstroServices {
       },
     },
     builder: {
-      async build(current) { return [{ path: "preview.mjs", operation: "create", content: previewServer(current.intent) }]; },
+      async build(current, plan: BuildPlan) {
+        try {
+          const aiBuild = await generateAiBuild(ai, current, plan);
+          if (aiBuild) {
+            const previewPatch = aiBuild.patches.find((patch) => patch.path === "preview.mjs" && patch.operation !== "delete");
+            if (!previewPatch) throw new Error("AI Builder must produce preview.mjs for the V0 runtime contract");
+            current.context.decisions.push(`AI Builder generated ${aiBuild.patches.length} patch(es) with ${aiBuild.provider}/${aiBuild.model}`);
+            return aiBuild.patches;
+          }
+        } catch (error) {
+          current.context.decisions.push(`AI Builder unavailable; deterministic fallback used: ${error instanceof Error ? error.message : "unknown error"}`);
+        }
+        return [{ path: "preview.mjs", operation: "create", content: previewServer(current.intent) }];
+      },
       async apply(current, patches) { await workspace.apply(patches); current.context.decisions.push(`Applied ${patches.length} patch(es) to isolated workspace`); },
     },
     runtime: { async run(): Promise<RuntimeResult> { if (preview) await preview.stop(); const started = Date.now(); preview = await sandbox.startPreview({ command: "node", args: ["preview.mjs"], healthPath: "/health", startupTimeoutMs: 5_000 }); await previewRegistry.register(task.id, preview); return { ok: true, previewUrl: `/api/previews/${task.id}/`, stdout: preview.stdout, stderr: preview.stderr, durationMs: Date.now() - started }; } },
@@ -63,7 +76,6 @@ export function createV0Services(task: MonstroTask): MonstroServices {
       async evaluate(_current, runtime, evidence) {
         const findings: EvaluationFinding[] = [];
         if (!runtime.ok) findings.push({ code: "runtime.failed", message: runtime.stderr || "Runtime failed", severity: "error", evidenceSource: "runtime" });
-
         const document = evidence.find((item) => item.source === "preview:document");
         const documentData = structuredData(document?.data);
         const title = typeof documentData?.title === "string" ? documentData.title : undefined;
@@ -71,13 +83,11 @@ export function createV0Services(task: MonstroTask): MonstroServices {
         if (!document) findings.push({ code: "observation.failed", message: "Preview document was not observed", severity: "error", evidenceSource: "preview:http" });
         if (title !== EXPECTED_TITLE) findings.push({ code: "document.title", message: `Expected title ${EXPECTED_TITLE}`, severity: "error", evidenceSource: "preview:document" });
         if (h1?.includes(EXPECTED_HEADING) !== true) findings.push({ code: "document.heading", message: `Expected heading ${EXPECTED_HEADING}`, severity: "error", evidenceSource: "preview:document" });
-
         const dom = evidence.find((item) => item.source === "preview:dom");
         const domData = structuredData(dom?.data);
         const mainCount = typeof domData?.main === "number" ? domData.main : 0;
         const headingCount = typeof domData?.headings === "number" ? domData.headings : 0;
         if (!dom || mainCount < 1 || headingCount < 1) findings.push({ code: "document.structure", message: "Preview must contain at least one main landmark and one heading", severity: "error", evidenceSource: "preview:dom" });
-
         const repairable = new Set(["document.title", "document.heading", "document.structure"]);
         const nextActions = findings.filter((finding) => repairable.has(finding.code)).map((finding) => ({ id: `repair-${finding.code}`, findingCode: finding.code, description: `Repair ${finding.code}`, targetPath: "preview.mjs" }));
         return { accepted: findings.length === 0, score: findings.length === 0 ? 1 : 0, findings, nextActions };
