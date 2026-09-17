@@ -16,8 +16,8 @@ function evidenceData(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
-test("observes document metadata as structured evidence", async () => {
-  const fixture = await serve("<!doctype html><title>MONSTRO Preview</title><h1>MONSTRO LIVE PREVIEW</h1>");
+test("observes document metadata and DOM structure as structured evidence", async () => {
+  const fixture = await serve("<!doctype html><html><head><title>MONSTRO Preview</title><style>body{margin:0}</style></head><body><main><h1>MONSTRO <span>LIVE</span> PREVIEW</h1><a href='/docs'>Docs</a><img src='/mark.png'></main><script>void 0</script></body></html>");
   try {
     const result = await new HttpPreviewObserver().observe(fixture.url, { ok: true, stdout: "", stderr: "", durationMs: 1 });
     assert.equal(result.ok, true);
@@ -25,6 +25,14 @@ test("observes document metadata as structured evidence", async () => {
     assert.ok(document, "expected preview:document evidence");
     const data = evidenceData(document.data);
     assert.deepEqual({ title: data.title, h1: data.h1 }, { title: "MONSTRO Preview", h1: "MONSTRO LIVE PREVIEW" });
+
+    const domEvidence = result.evidence.find((item) => item.source === "preview:dom");
+    assert.ok(domEvidence, "expected preview:dom evidence");
+    const dom = evidenceData(domEvidence.data);
+    assert.deepEqual(
+      { html: dom.html, head: dom.head, body: dom.body, main: dom.main, headings: dom.headings, links: dom.links, images: dom.images, scripts: dom.scripts, styles: dom.styles },
+      { html: 1, head: 1, body: 1, main: 1, headings: 1, links: 1, images: 1, scripts: 1, styles: 1 },
+    );
   } finally { await fixture.close(); }
 });
 
