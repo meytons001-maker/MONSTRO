@@ -27,7 +27,7 @@ function timeout(value?: string): number | undefined {
   return parsed;
 }
 
-export function createModelRouterFromEnvironment(env: AiEnvironment = process.env): ModelRouter {
+export function createModelRouterFromEnvironment(env: Readonly<Record<string, string | undefined>> = process.env): ModelRouter {
   const baseUrl = env.MONSTRO_AI_BASE_URL?.trim();
   const model = env.MONSTRO_AI_MODEL?.trim();
   if (!baseUrl && !model) return new ModelRouter();
