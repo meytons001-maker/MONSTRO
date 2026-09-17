@@ -13,6 +13,7 @@
     "@monstro/contracts": "workspace:*",
     "@monstro/core": "workspace:*",
     "@monstro/evaluator": "workspace:*",
+    "@monstro/inspector": "workspace:*",
     "@monstro/observer": "workspace:*",
     "@monstro/runtime": "workspace:*",
     "next": "^15.1.3",
