@@ -1,4 +1,4 @@
-import type { AiCapability, AiProvider, AiRequest, AiResponse } from "./index.js";
+import type { AiCapability, AiProvider, AiRequest, AiResponse } from "./index.ts";
 
 export interface OpenAiCompatibleProviderOptions {
   id: string;
