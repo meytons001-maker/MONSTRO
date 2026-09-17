@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { AcceptanceCriterion, Evidence, RuntimeResult } from "@monstro/contracts";
-import { evaluateAcceptance } from "./index.ts";
+import { evaluateAcceptance } from "./index.js";
 
 const runtime: RuntimeResult = { ok: true, stdout: "", stderr: "", durationMs: 1 };
 const evidence: Evidence[] = [
