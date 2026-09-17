@@ -10,6 +10,10 @@ import { previewRegistry } from "./preview-registry";
 const EXPECTED_TITLE = "MONSTRO Preview";
 const EXPECTED_HEADING = "MONSTRO LIVE PREVIEW";
 
+function structuredData(value: unknown): Record<string, unknown> | undefined {
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
+}
+
 function previewServer(intent: string, title = EXPECTED_TITLE, heading = EXPECTED_HEADING) {
   const safeIntent = JSON.stringify(intent.slice(0, 160));
   return `import http from 'node:http';\nconst intent=${safeIntent};\nconst args=process.argv.slice(2);\nconst value=(name,fallback)=>{const i=args.indexOf(name);return i>=0?args[i+1]:fallback};\nconst port=Number(value('--port',process.env.PORT||'3000'));\nconst host=value('--host',process.env.HOST||'127.0.0.1');\nconst html=\`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${title}</title><style>html,body{margin:0;min-height:100%;background:#070a08;color:#eef3ee;font-family:system-ui}main{min-height:100vh;display:grid;place-items:center;background:radial-gradient(circle,#23321e,#070a08 55%)}section{text-align:center;max-width:760px;padding:48px}.mark{font-size:64px;color:#d7ff45}h1{font-size:clamp(30px,6vw,72px);margin:10px 0}p{color:#96a099}</style></head><body><main><section><div class="mark">M</div><h1>${heading}</h1><p>\${intent}</p></section></main></body></html>\`;\nhttp.createServer((req,res)=>{if(req.url==='/health'){res.writeHead(200,{'content-type':'application/json'});res.end(JSON.stringify({ok:true,engine:'MONSTRO'}));return}res.writeHead(200,{'content-type':'text/html; charset=utf-8'});res.end(html)}).listen(port,host,()=>console.log(JSON.stringify({ready:true,host,port})));\n`;
@@ -17,7 +21,7 @@ function previewServer(intent: string, title = EXPECTED_TITLE, heading = EXPECTE
 
 export function createTask(intent: string): MonstroTask {
   const id = randomUUID();
-  return { id, intent, phase: "understand", context: { projectId: id, rootDir: join(tmpdir(), "monstro-workspaces"), summary: "MONSTRO V0 mission", decisions: [] }, requestedCapabilities: ["filesystem.read", "filesystem.write", "process.execute"], acceptance: [{ id: "preview-ok", description: "Generated web preview must become reachable", required: true }], iteration: 0, maxIterations: 2 };
+  return { id, intent, phase: "understand", context: { projectId: id, rootDir: join(tmpdir(), "monstro-workspaces"), summary: "MONSTRO V0 mission", decisions: [] }, requestedCapabilities: ["filesystem.read", "filesystem.write", "process.execute"], acceptance: [{ id: "preview-ok", description: "Generated web preview must become reachable and structurally valid", required: true }], iteration: 0, maxIterations: 2 };
 }
 
 export function createV0Services(task: MonstroTask): MonstroServices {
@@ -44,12 +48,25 @@ export function createV0Services(task: MonstroTask): MonstroServices {
       async evaluate(_current, runtime, evidence) {
         const findings: EvaluationFinding[] = [];
         if (!runtime.ok) findings.push({ code: "runtime.failed", message: runtime.stderr || "Runtime failed", severity: "error", evidenceSource: "runtime" });
+
         const document = evidence.find((item) => item.source === "preview:document");
-        const data = document?.data as { title?: string; h1?: string } | undefined;
-        if (data?.title !== EXPECTED_TITLE) findings.push({ code: "document.title", message: `Expected title ${EXPECTED_TITLE}`, severity: "error", evidenceSource: "preview:document" });
-        if (data?.h1?.includes(EXPECTED_HEADING) !== true) findings.push({ code: "document.heading", message: `Expected heading ${EXPECTED_HEADING}`, severity: "error", evidenceSource: "preview:document" });
+        const documentData = structuredData(document?.data);
+        const title = typeof documentData?.title === "string" ? documentData.title : undefined;
+        const h1 = typeof documentData?.h1 === "string" ? documentData.h1 : undefined;
         if (!document) findings.push({ code: "observation.failed", message: "Preview document was not observed", severity: "error", evidenceSource: "preview:http" });
-        const nextActions = findings.filter((finding) => finding.code === "document.title" || finding.code === "document.heading").map((finding) => ({ id: `repair-${finding.code}`, findingCode: finding.code, description: `Repair ${finding.code}`, targetPath: "preview.mjs" }));
+        if (title !== EXPECTED_TITLE) findings.push({ code: "document.title", message: `Expected title ${EXPECTED_TITLE}`, severity: "error", evidenceSource: "preview:document" });
+        if (h1?.includes(EXPECTED_HEADING) !== true) findings.push({ code: "document.heading", message: `Expected heading ${EXPECTED_HEADING}`, severity: "error", evidenceSource: "preview:document" });
+
+        const dom = evidence.find((item) => item.source === "preview:dom");
+        const domData = structuredData(dom?.data);
+        const mainCount = typeof domData?.main === "number" ? domData.main : 0;
+        const headingCount = typeof domData?.headings === "number" ? domData.headings : 0;
+        if (!dom || mainCount < 1 || headingCount < 1) {
+          findings.push({ code: "document.structure", message: "Preview must contain at least one main landmark and one heading", severity: "error", evidenceSource: "preview:dom" });
+        }
+
+        const repairable = new Set(["document.title", "document.heading", "document.structure"]);
+        const nextActions = findings.filter((finding) => repairable.has(finding.code)).map((finding) => ({ id: `repair-${finding.code}`, findingCode: finding.code, description: `Repair ${finding.code}`, targetPath: "preview.mjs" }));
         return { accepted: findings.length === 0, score: findings.length === 0 ? 1 : 0, findings, nextActions };
       },
     },
