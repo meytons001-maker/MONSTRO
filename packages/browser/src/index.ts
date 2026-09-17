@@ -9,6 +9,8 @@ export interface ChromiumSessionOptions {
   resolveImpl?: AddressResolver;
 }
 
+type RenderedDocumentSnapshot = Pick<BrowserSnapshot, "title" | "h1" | "html" | "canvasCount" | "headings">;
+
 function consoleLevel(type: string): BrowserConsoleEntry["level"] {
   if (type === "error") return "error";
   if (type === "warning" || type === "warn") return "warn";
@@ -43,15 +45,15 @@ class PlaywrightChromiumSession implements BrowserSession {
 
     await this.page.goto(url, { waitUntil: "domcontentloaded", timeout: options.timeoutMs });
     await this.page.waitForLoadState("networkidle", { timeout: Math.min(options.timeoutMs, 2_000) }).catch(() => undefined);
-    const document = await this.page.evaluate(() => ({
-      title: document.title || undefined,
-      h1: document.querySelector("h1")?.textContent?.replace(/\s+/g, " ").trim() || undefined,
-      html: document.documentElement.outerHTML.slice(0, 512_000),
-      canvasCount: document.querySelectorAll("canvas").length,
-      headings: document.querySelectorAll("h1,h2,h3,h4,h5,h6").length,
+    const renderedDocument = await this.page.evaluate<RenderedDocumentSnapshot>(() => ({
+      title: globalThis.document.title || undefined,
+      h1: globalThis.document.querySelector("h1")?.textContent?.replace(/\s+/g, " ").trim() || undefined,
+      html: globalThis.document.documentElement.outerHTML.slice(0, 512_000),
+      canvasCount: globalThis.document.querySelectorAll("canvas").length,
+      headings: globalThis.document.querySelectorAll("h1,h2,h3,h4,h5,h6").length,
     }));
     for (const request of requests) if (request.status === undefined) request.status = responseStatus.get(request.url);
-    return { url: this.page.url(), ...document, console: consoleEntries, requests, runtimeErrors };
+    return { url: this.page.url(), ...renderedDocument, console: consoleEntries, requests, runtimeErrors };
   }
 
   async close(): Promise<void> {
