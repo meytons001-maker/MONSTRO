@@ -4,6 +4,7 @@ export interface PublicUrlInspectorOptions { timeoutMs?: number; maxHtmlBytes?: 
 
 const PRIVATE_HOST = /^(localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|::1|10(?:\.\d{1,3}){3}|192\.168(?:\.\d{1,3}){2}|169\.254(?:\.\d{1,3}){2}|172\.(?:1[6-9]|2\d|3[01])(?:\.\d{1,3}){2})$/i;
 const ASSET_ATTR = /<(script|link|img|source)\b[^>]*?\b(src|href)=["']([^"']+)["'][^>]*>/gi;
+const INTERACTIVE_ASSET = /\.(?:glb|gltf|bin|hdr|exr|ktx2|basis|wasm)$/i;
 
 export function extractPublicHttpUrl(intent: string): URL | undefined {
   const match = intent.match(/https?:\/\/[^\s<>'"`]+/i);
@@ -20,11 +21,11 @@ function textMatch(html: string, expression: RegExp): string | undefined {
 }
 
 function assetKind(tag: string, rawUrl: string): string {
+  const pathname = rawUrl.split(/[?#]/, 1)[0]?.toLowerCase() ?? "";
+  if (INTERACTIVE_ASSET.test(pathname)) return "interactive";
   if (tag === "script") return "script";
   if (tag === "img" || tag === "source") return "media";
-  const pathname = rawUrl.split(/[?#]/, 1)[0]?.toLowerCase() ?? "";
   if (pathname.endsWith(".css")) return "stylesheet";
-  if (/\.(?:glb|gltf|bin|hdr|exr|ktx2|basis|wasm)$/i.test(pathname)) return "interactive";
   return "resource";
 }
 
