@@ -1,5 +1,5 @@
-import type { AiResponse } from "./index.js";
-import { ModelRouter } from "./index.js";
+import type { AiResponse } from "./index.ts";
+import { ModelRouter } from "./index.ts";
 
 export interface AiPlanStep { title: string; description: string; }
 export interface AiPlan { rationale: string; steps: AiPlanStep[]; provider: string; model: string; }
