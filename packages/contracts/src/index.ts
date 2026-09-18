@@ -68,4 +68,6 @@ export type FindingCode =
 export interface EvaluationFinding { code: FindingCode; message: string; severity: "error" | "warning"; evidenceSource?: string; requirementIds?: string[]; }
 export interface RepairAction { id: string; findingCode: FindingCode; description: string; targetPath?: string; requirementIds?: string[]; }
 export interface Evaluation { accepted: boolean; score: number; findings: EvaluationFinding[]; nextActions: RepairAction[]; }
-export interface Delivery { taskId: string; completedAt: string; summary: string; previewUrl?: string; artifacts: string[]; }
+export interface RequirementDeliveryTrace { requirementId: string; buildPaths: string[]; repairPaths: string[]; evidenceSources: string[]; findingCodes: FindingCode[]; status: "satisfied" | "unresolved"; }
+export interface DeliveryTrace { requirements: RequirementDeliveryTrace[]; }
+export interface Delivery { taskId: string; completedAt: string; summary: string; previewUrl?: string; artifacts: string[]; trace?: DeliveryTrace; }
