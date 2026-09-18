@@ -28,7 +28,8 @@ export type AcceptanceCheck =
   | { kind: "evidence.field.min"; source: string; field: string; expected: number };
 
 export interface AcceptanceCriterion { id: string; description: string; required: boolean; checks?: AcceptanceCheck[]; repairTargetPath?: string; }
-export interface ProjectContext { projectId: string; rootDir: string; summary: string; decisions: string[]; }
+export type ExperienceFidelity = "advisory" | "required";
+export interface ProjectContext { projectId: string; rootDir: string; summary: string; decisions: string[]; experienceFidelity?: ExperienceFidelity; }
 export interface MonstroTask { id: string; intent: string; phase: TaskPhase; context: ProjectContext; requestedCapabilities: Capability[]; acceptance: AcceptanceCriterion[]; iteration: number; maxIterations: number; }
 export interface Evidence { source: string; kind: "code" | "runtime" | "visual" | "network" | "user"; summary: string; data?: unknown; }
 export interface BuildPlanStep { id: string; title: string; description: string; status: "pending" | "running" | "done" | "failed"; }
