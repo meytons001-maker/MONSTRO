@@ -10,6 +10,7 @@ function checkAcceptance(check: AcceptanceCheck, runtime: RuntimeResult, evidenc
   if (check.kind === "evidence.field.includes") return { ok: typeof actual === "string" && actual.includes(check.expected), source: check.source, detail: `${check.source}.${check.field} must include ${check.expected}` };
   return { ok: typeof actual === "number" && actual >= check.expected, source: check.source, detail: `${check.source}.${check.field} must be at least ${check.expected}` };
 }
+function traceEvidence(evidence: Evidence[], source: string | undefined, requirementIds: string[]): void { if (!source || source === "runtime") return; for (const item of evidence) if (item.source === source) item.requirementIds = [...new Set([...(item.requirementIds ?? []), ...requirementIds])]; }
 function numberField(data: Record<string, unknown> | undefined, field: string): number { const value = data?.[field]; return typeof value === "number" && Number.isFinite(value) ? value : 0; }
 function stringArray(data: Record<string, unknown> | undefined, field: string): string[] { const value = data?.[field]; return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []; }
 
@@ -19,6 +20,7 @@ function compareExperience(evidence: Evidence[], required = false): { findings: 
   const produced = evidence.find((item) => item.source === "preview:experience"); const targetData = record(target.data); const producedData = record(produced?.data);
   const findings: EvaluationFinding[] = []; const nextActions: RepairAction[] = []; let checks = 1; let passed = produced ? 1 : 0;
   const requirementIds = ["interactivity", "experience-fidelity"];
+  if (produced) traceEvidence(evidence, produced.source, requirementIds);
   const add = (code: FindingCode, message: string) => {
     findings.push({ code, message, severity: required ? "error" : "warning", evidenceSource: produced?.source ?? "preview:experience", requirementIds });
     nextActions.push({ id: `repair-experience-${nextActions.length + 1}`, findingCode: code, description: message, targetPath: "preview.mjs", requirementIds });
@@ -37,8 +39,8 @@ export interface EvaluationPolicy { experienceFidelity?: "advisory" | "required"
 export function evaluateAcceptance(criteria: AcceptanceCriterion[], runtime: RuntimeResult, evidence: Evidence[], policy: EvaluationPolicy = {}): Evaluation {
   const findings: EvaluationFinding[] = []; const nextActions: RepairAction[] = []; let checks = 0; let passed = 0;
   for (const criterion of criteria) for (const check of criterion.checks ?? []) {
-    checks += 1; const result = checkAcceptance(check, runtime, evidence); if (result.ok) { passed += 1; continue; }
-    const requirementIds = [`acceptance:${criterion.id}`];
+    checks += 1; const result = checkAcceptance(check, runtime, evidence); const requirementIds = [`acceptance:${criterion.id}`];
+    if (result.ok) { passed += 1; traceEvidence(evidence, result.source, requirementIds); continue; }
     findings.push({ code: "acceptance.unsatisfied", message: `${criterion.description}: ${result.detail}`, severity: criterion.required ? "error" : "warning", evidenceSource: result.source, requirementIds });
     if (criterion.repairTargetPath) nextActions.push({ id: `repair-${criterion.id}-${nextActions.length + 1}`, findingCode: "acceptance.unsatisfied", description: `Satisfy acceptance criterion: ${criterion.description}`, targetPath: criterion.repairTargetPath, requirementIds });
   }
