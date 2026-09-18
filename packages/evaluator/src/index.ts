@@ -25,7 +25,7 @@ function stringArray(data: Record<string, unknown> | undefined, field: string): 
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
 
-function compareExperience(evidence: Evidence[]): { findings: EvaluationFinding[]; nextActions: RepairAction[] } {
+function compareExperience(evidence: Evidence[], required = false): { findings: EvaluationFinding[]; nextActions: RepairAction[] } {
   const target = evidence.find((item) => item.source === "browser:experience") ?? evidence.find((item) => item.source === "reference:experience");
   if (!target) return { findings: [], nextActions: [] };
   const produced = evidence.find((item) => item.source === "preview:experience");
@@ -35,7 +35,7 @@ function compareExperience(evidence: Evidence[]): { findings: EvaluationFinding[
   const nextActions: RepairAction[] = [];
 
   const add = (code: FindingCode, message: string) => {
-    findings.push({ code, message, severity: "warning", evidenceSource: produced?.source ?? "preview:experience" });
+    findings.push({ code, message, severity: required ? "error" : "warning", evidenceSource: produced?.source ?? "preview:experience" });
     nextActions.push({ id: `repair-experience-${nextActions.length + 1}`, findingCode: code, description: message, targetPath: "preview.mjs" });
   };
 
@@ -59,7 +59,9 @@ function compareExperience(evidence: Evidence[]): { findings: EvaluationFinding[
   return { findings, nextActions };
 }
 
-export function evaluateAcceptance(criteria: AcceptanceCriterion[], runtime: RuntimeResult, evidence: Evidence[]): Evaluation {
+export interface EvaluationPolicy { experienceFidelity?: "advisory" | "required"; }
+
+export function evaluateAcceptance(criteria: AcceptanceCriterion[], runtime: RuntimeResult, evidence: Evidence[], policy: EvaluationPolicy = {}): Evaluation {
   const findings: EvaluationFinding[] = [];
   const nextActions: RepairAction[] = [];
   let checks = 0;
@@ -75,7 +77,7 @@ export function evaluateAcceptance(criteria: AcceptanceCriterion[], runtime: Run
     }
   }
 
-  const comparison = compareExperience(evidence);
+  const comparison = compareExperience(evidence, policy.experienceFidelity === "required");
   findings.push(...comparison.findings);
   nextActions.push(...comparison.nextActions);
   const blocking = findings.some((finding) => finding.severity === "error");
