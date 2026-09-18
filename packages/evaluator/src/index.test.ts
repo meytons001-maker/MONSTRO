@@ -55,7 +55,7 @@ test("compares rendered reference experience with produced preview", () => {
   ];
   const result = evaluateAcceptance(criteria, runtime, compared);
   assert.equal(result.accepted, true);
-  assert.equal(result.score, 5 / 9);
+  assert.equal(result.score, 6 / 9);
   assert.deepEqual(result.findings.map((finding) => finding.code), ["experience.canvas.missing", "experience.assets.missing", "experience.technology.missing"]);
   assert.ok(result.findings.every((finding) => finding.severity === "warning"));
   assert.equal(result.nextActions.length, 3);
@@ -74,7 +74,6 @@ test("uses static reference profile when browser profile is unavailable", () => 
   assert.deepEqual(result.findings, []);
 });
 
-
 test("required experience fidelity blocks delivery and keeps repair actions", () => {
   const compared: Evidence[] = [
     ...evidence,
@@ -83,7 +82,7 @@ test("required experience fidelity blocks delivery and keeps repair actions", ()
   ];
   const result = evaluateAcceptance(criteria, runtime, compared, { experienceFidelity: "required" });
   assert.equal(result.accepted, false);
-  assert.equal(result.score, 5 / 9);
+  assert.equal(result.score, 6 / 9);
   assert.ok(result.findings.some((finding) => finding.code === "experience.canvas.missing" && finding.severity === "error"));
   assert.ok(result.nextActions.every((action) => action.targetPath === "preview.mjs"));
 });
