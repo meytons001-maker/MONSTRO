@@ -23,7 +23,7 @@ test("orchestrator repairs a failed observation and delivers on the next iterati
   const journal = new MissionJournal();
 
   const services: MonstroServices = {
-    inspector: { async inspect() { return [{ source: "reference:experience", kind: "reference", summary: "fixture reference profile", data: { canvasCount: 1 } }]; } },
+    inspector: { async inspect() { return [{ source: "reference:experience", kind: "visual", summary: "fixture reference profile", data: { canvasCount: 1 } }]; } },
     architect: { async plan(current) { return { taskId: current.id, rationale: "test repair loop", steps: [{ id: "build", title: "Build", description: "fixture", status: "pending" }] }; } },
     builder: {
       async build() { return [{ path: "preview.html", operation: "create", content: artifact }]; },
