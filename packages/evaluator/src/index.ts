@@ -1,4 +1,4 @@
-import type { AcceptanceCheck, AcceptanceCriterion, Evidence, Evaluation, EvaluationFinding, RepairAction, RuntimeResult } from "@monstro/contracts";
+import type { AcceptanceCheck, AcceptanceCriterion, Evidence, Evaluation, EvaluationFinding, FindingCode, RepairAction, RuntimeResult } from "@monstro/contracts";
 
 function record(value: unknown): Record<string, unknown> | undefined {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
@@ -34,7 +34,7 @@ function compareExperience(evidence: Evidence[]): { findings: EvaluationFinding[
   const findings: EvaluationFinding[] = [];
   const nextActions: RepairAction[] = [];
 
-  const add = (code: string, message: string) => {
+  const add = (code: FindingCode, message: string) => {
     findings.push({ code, message, severity: "warning", evidenceSource: produced?.source ?? "preview:experience" });
     nextActions.push({ id: `repair-experience-${nextActions.length + 1}`, findingCode: code, description: message, targetPath: "preview.mjs" });
   };
