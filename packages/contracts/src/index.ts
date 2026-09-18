@@ -73,3 +73,17 @@ export interface EvaluationIterationTrace { iteration: number; accepted: boolean
 export interface RequirementDeliveryTrace { requirementId: string; buildPaths: string[]; repairPaths: string[]; evidenceSources: string[]; findingCodes: FindingCode[]; status: "satisfied" | "unresolved"; }
 export interface DeliveryTrace { requirements: RequirementDeliveryTrace[]; evaluations?: EvaluationIterationTrace[]; }
 export interface Delivery { taskId: string; completedAt: string; summary: string; previewUrl?: string; artifacts: string[]; trace?: DeliveryTrace; }
+
+export interface MissionPatchProgress { path: string; operation: FilePatch["operation"]; requirementIds: string[]; }
+export interface MissionEvaluationProgress { iteration: number; accepted: boolean; score: number; requirementIds: string[]; findingCodes: string[]; repairActionIds: string[]; }
+export interface MissionTraceProgress { build: MissionPatchProgress[]; repairs: MissionPatchProgress[]; evaluations: MissionEvaluationProgress[]; }
+export type MissionEventType = "phase.changed" | "iteration.started" | "observation.completed" | "build.applied" | "repair.completed" | "trace.updated" | "mission.completed" | "mission.failed";
+export interface MissionTransportEvent {
+  id: string;
+  taskId: string;
+  type: MissionEventType;
+  phase: TaskPhase;
+  timestamp: string;
+  detail?: string;
+  data?: { previewUrl?: string; artifacts?: string[]; completedAt?: string; progress?: MissionTraceProgress; [key: string]: unknown };
+}
