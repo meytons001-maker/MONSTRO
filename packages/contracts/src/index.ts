@@ -40,7 +40,7 @@ export interface MissionUnderstanding {
 }
 export interface ProjectContext { projectId: string; rootDir: string; summary: string; decisions: string[]; experienceFidelity?: ExperienceFidelity; understanding?: MissionUnderstanding; }
 export interface MonstroTask { id: string; intent: string; phase: TaskPhase; context: ProjectContext; requestedCapabilities: Capability[]; acceptance: AcceptanceCriterion[]; iteration: number; maxIterations: number; }
-export interface Evidence { source: string; kind: "code" | "runtime" | "visual" | "network" | "user"; summary: string; data?: unknown; }
+export interface Evidence { source: string; kind: "code" | "runtime" | "visual" | "network" | "user"; summary: string; data?: unknown; requirementIds?: string[]; }
 export interface BuildRequirement {
   id: string;
   description: string;
