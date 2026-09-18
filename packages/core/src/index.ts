@@ -18,6 +18,10 @@ export class MonstroOrchestrator {
   readonly journal: MissionJournal;
   constructor(private readonly services: MonstroServices, journal = new MissionJournal()) { this.journal = journal; }
   private async phase(task: MonstroTask, phase: TaskPhase, detail?: string): Promise<void> { task.phase = phase; await this.journal.record(task, "phase.changed", detail); }
+  private async publishTrace(task: MonstroTask, trace: MissionTraceCollector, detail: string): Promise<void> {
+    const snapshot = trace.snapshot();
+    await this.journal.record(task, "trace.updated", detail, { buildPatches: snapshot.buildPatches, repairPatches: snapshot.repairPatches, evaluations: snapshot.evaluations });
+  }
 
   async execute(task: MonstroTask): Promise<Delivery> {
     const trace = new MissionTraceCollector();
@@ -31,6 +35,7 @@ export class MonstroOrchestrator {
       await this.services.builder.apply(task, buildPatches);
       trace.recordBuild(buildPatches);
       await this.journal.record(task, "build.applied", `${buildPatches.length} patch(es)`, { paths: buildPatches.map((patch) => patch.path), requirementIds: [...new Set(buildPatches.flatMap((patch) => patch.requirementIds ?? []))], patches: buildPatches.map((patch) => ({ path: patch.path, operation: patch.operation, requirementIds: patch.requirementIds ?? [] })) });
+      await this.publishTrace(task, trace, "build recorded");
 
       while (task.iteration < task.maxIterations) {
         task.iteration += 1;
@@ -43,6 +48,7 @@ export class MonstroOrchestrator {
         await this.phase(task, "evaluate", observation.ok ? "observation ok" : "observation failed");
         const evaluation = await this.services.evaluator.evaluate(task, runtime, [...initialEvidence, ...observation.evidence]);
         trace.recordEvaluation(task.iteration, evaluation);
+        await this.publishTrace(task, trace, `evaluation ${task.iteration} recorded`);
 
         if (runtime.ok && observation.ok && evaluation.accepted) {
           await this.phase(task, "deliver", `score ${evaluation.score}`);
@@ -59,6 +65,7 @@ export class MonstroOrchestrator {
         if (patches.length === 0) break;
         await this.services.builder.apply(task, patches);
         trace.recordRepair(patches);
+        await this.publishTrace(task, trace, `repair ${task.iteration} recorded`);
       }
       throw new Error(`MONSTRO could not satisfy task ${task.id} after ${task.iteration} iterations`);
     } catch (error) {
