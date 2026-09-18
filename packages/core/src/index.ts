@@ -1,4 +1,4 @@
-import type { BuildPlan, Delivery, Evaluation, Evidence, FilePatch, MonstroTask, ObservationResult, RuntimeResult, TaskPhase } from "@monstro/contracts";
+import type { BuildPlan, Delivery, DeliveryTrace, Evaluation, Evidence, FilePatch, MonstroTask, ObservationResult, RuntimeResult, TaskPhase } from "@monstro/contracts";
 import { MissionJournal } from "./mission.ts";
 export * from "./mission.ts";
 
@@ -18,6 +18,8 @@ export class MonstroOrchestrator {
   private async phase(task: MonstroTask, phase: TaskPhase, detail?: string): Promise<void> { task.phase = phase; await this.journal.record(task, "phase.changed", detail); }
 
   async execute(task: MonstroTask): Promise<Delivery> {
+    const appliedBuildPatches: FilePatch[] = [];
+    const appliedRepairPatches: FilePatch[] = [];
     try {
       await this.phase(task, "inspect");
       const initialEvidence = await this.services.inspector.inspect(task);
@@ -26,6 +28,7 @@ export class MonstroOrchestrator {
       await this.phase(task, "build", `${plan.steps.length} plan step(s)`);
       const buildPatches = await this.services.builder.build(task, plan);
       await this.services.builder.apply(task, buildPatches);
+      appliedBuildPatches.push(...buildPatches);
       await this.journal.record(task, "build.applied", `${buildPatches.length} patch(es)`, { paths: buildPatches.map((patch) => patch.path), requirementIds: [...new Set(buildPatches.flatMap((patch) => patch.requirementIds ?? []))], patches: buildPatches.map((patch) => ({ path: patch.path, operation: patch.operation, requirementIds: patch.requirementIds ?? [] })) });
 
       while (task.iteration < task.maxIterations) {
@@ -43,6 +46,9 @@ export class MonstroOrchestrator {
         if (runtime.ok && observation.ok && evaluation.accepted) {
           await this.phase(task, "deliver", `score ${evaluation.score}`);
           const delivery = await this.services.exporter.deliver(task, runtime, evaluation);
+          const requirementIds = new Set([...plan.requirements.map((requirement) => requirement.id), ...appliedBuildPatches.flatMap((patch) => patch.requirementIds ?? []), ...appliedRepairPatches.flatMap((patch) => patch.requirementIds ?? [])]);
+          const trace: DeliveryTrace = { requirements: [...requirementIds].map((requirementId) => { const findings = evaluation.findings.filter((finding) => finding.requirementIds?.includes(requirementId)); return { requirementId, buildPaths: [...new Set(appliedBuildPatches.filter((patch) => patch.requirementIds?.includes(requirementId)).map((patch) => patch.path))], repairPaths: [...new Set(appliedRepairPatches.filter((patch) => patch.requirementIds?.includes(requirementId)).map((patch) => patch.path))], evidenceSources: [...new Set(findings.flatMap((finding) => finding.evidenceSource ? [finding.evidenceSource] : []))], findingCodes: [...new Set(findings.map((finding) => finding.code))], status: findings.some((finding) => finding.severity === "error") ? "unresolved" as const : "satisfied" as const }; }) };
+          delivery.trace = trace;
           await this.journal.record(task, "mission.completed", delivery.summary, { previewUrl: delivery.previewUrl, artifacts: delivery.artifacts, completedAt: delivery.completedAt });
           return delivery;
         }
@@ -53,6 +59,7 @@ export class MonstroOrchestrator {
         await this.journal.record(task, "repair.completed", `${patches.length} patch(es)`, { actions: evaluation.nextActions.map((action) => action.id), paths: patches.map((patch) => patch.path), requirementIds: [...new Set(patches.flatMap((patch) => patch.requirementIds ?? []))], patches: patches.map((patch) => ({ path: patch.path, operation: patch.operation, requirementIds: patch.requirementIds ?? [] })) });
         if (patches.length === 0) break;
         await this.services.builder.apply(task, patches);
+        appliedRepairPatches.push(...patches);
       }
       throw new Error(`MONSTRO could not satisfy task ${task.id} after ${task.iteration} iterations`);
     } catch (error) {
