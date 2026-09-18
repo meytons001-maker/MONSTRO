@@ -53,6 +53,7 @@ test("orchestrator repairs a failed observation and delivers on the next iterati
   const events = journal.snapshot();
 
   assert.equal(delivery.summary, "delivered after repair");
+  assert.deepEqual(delivery.trace?.requirements, [{ requirementId: "acceptance:title", buildPaths: ["preview.html"], repairPaths: ["preview.html"], evidenceSources: [], findingCodes: [], status: "satisfied" }]);
   assert.equal(current.iteration, 2);
   assert.equal(artifact, "MONSTRO Preview");
   assert.equal(applied.length, 2);
