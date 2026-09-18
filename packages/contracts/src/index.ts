@@ -49,7 +49,7 @@ export interface BuildRequirement {
 }
 export interface BuildPlanStep { id: string; title: string; description: string; status: "pending" | "running" | "done" | "failed"; }
 export interface BuildPlan { taskId: string; rationale: string; requirements: BuildRequirement[]; steps: BuildPlanStep[]; }
-export interface FilePatch { path: string; operation: "create" | "update" | "delete"; content?: string; }
+export interface FilePatch { path: string; operation: "create" | "update" | "delete"; content?: string; requirementIds?: string[]; }
 export interface RuntimeResult { ok: boolean; previewUrl?: string; stdout: string; stderr: string; durationMs: number; }
 
 export interface ObservationResult { ok: boolean; evidence: Evidence[]; durationMs: number; }
