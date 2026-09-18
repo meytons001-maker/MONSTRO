@@ -1,4 +1,4 @@
-import type { BuildPlan, Delivery, DeliveryTrace, Evaluation, Evidence, FilePatch, MonstroTask, ObservationResult, RuntimeResult, TaskPhase } from "@monstro/contracts";
+import type { BuildPlan, Delivery, DeliveryTrace, Evaluation, EvaluationIterationTrace, Evidence, FilePatch, MonstroTask, ObservationResult, RuntimeResult, TaskPhase } from "@monstro/contracts";
 import { MissionJournal } from "./mission.ts";
 export * from "./mission.ts";
 
@@ -20,6 +20,7 @@ export class MonstroOrchestrator {
   async execute(task: MonstroTask): Promise<Delivery> {
     const appliedBuildPatches: FilePatch[] = [];
     const appliedRepairPatches: FilePatch[] = [];
+    const evaluationHistory: EvaluationIterationTrace[] = [];
     try {
       await this.phase(task, "inspect");
       const initialEvidence = await this.services.inspector.inspect(task);
@@ -42,12 +43,13 @@ export class MonstroOrchestrator {
         await this.phase(task, "evaluate", observation.ok ? "observation ok" : "observation failed");
         const evaluationEvidence = [...initialEvidence, ...observation.evidence];
         const evaluation = await this.services.evaluator.evaluate(task, runtime, evaluationEvidence);
+        evaluationHistory.push({ iteration: task.iteration, accepted: evaluation.accepted, score: evaluation.score, evidenceTrace: (evaluation.evidenceTrace ?? []).map((trace) => ({ requirementId: trace.requirementId, evidenceSources: [...trace.evidenceSources] })), findings: evaluation.findings.map((finding) => ({ ...finding, requirementIds: finding.requirementIds ? [...finding.requirementIds] : undefined })), repairActionIds: evaluation.nextActions.map((action) => action.id) });
 
         if (runtime.ok && observation.ok && evaluation.accepted) {
           await this.phase(task, "deliver", `score ${evaluation.score}`);
           const delivery = await this.services.exporter.deliver(task, runtime, evaluation);
-          const requirementIds = new Set([...plan.requirements.map((requirement) => requirement.id), ...appliedBuildPatches.flatMap((patch) => patch.requirementIds ?? []), ...appliedRepairPatches.flatMap((patch) => patch.requirementIds ?? []), ...(evaluation.evidenceTrace ?? []).map((trace) => trace.requirementId)]);
-          const trace: DeliveryTrace = { requirements: [...requirementIds].map((requirementId) => { const findings = evaluation.findings.filter((finding) => finding.requirementIds?.includes(requirementId)); const evaluatedSources = evaluation.evidenceTrace?.find((item) => item.requirementId === requirementId)?.evidenceSources ?? []; return { requirementId, buildPaths: [...new Set(appliedBuildPatches.filter((patch) => patch.requirementIds?.includes(requirementId)).map((patch) => patch.path))], repairPaths: [...new Set(appliedRepairPatches.filter((patch) => patch.requirementIds?.includes(requirementId)).map((patch) => patch.path))], evidenceSources: [...new Set([...evaluatedSources, ...findings.flatMap((finding) => finding.evidenceSource ? [finding.evidenceSource] : [])])], findingCodes: [...new Set(findings.map((finding) => finding.code))], status: findings.some((finding) => finding.severity === "error") ? "unresolved" as const : "satisfied" as const }; }) };
+          const requirementIds = new Set([...plan.requirements.map((requirement) => requirement.id), ...appliedBuildPatches.flatMap((patch) => patch.requirementIds ?? []), ...appliedRepairPatches.flatMap((patch) => patch.requirementIds ?? []), ...evaluationHistory.flatMap((item) => item.evidenceTrace.map((trace) => trace.requirementId))]);
+          const trace: DeliveryTrace = { requirements: [...requirementIds].map((requirementId) => { const historicalFindings = evaluationHistory.flatMap((item) => item.findings).filter((finding) => finding.requirementIds?.includes(requirementId)); const historicalSources = evaluationHistory.flatMap((item) => item.evidenceTrace.filter((trace) => trace.requirementId === requirementId).flatMap((trace) => trace.evidenceSources)); const finalFindings = evaluation.findings.filter((finding) => finding.requirementIds?.includes(requirementId)); return { requirementId, buildPaths: [...new Set(appliedBuildPatches.filter((patch) => patch.requirementIds?.includes(requirementId)).map((patch) => patch.path))], repairPaths: [...new Set(appliedRepairPatches.filter((patch) => patch.requirementIds?.includes(requirementId)).map((patch) => patch.path))], evidenceSources: [...new Set([...historicalSources, ...historicalFindings.flatMap((finding) => finding.evidenceSource ? [finding.evidenceSource] : [])])], findingCodes: [...new Set(historicalFindings.map((finding) => finding.code))], status: finalFindings.some((finding) => finding.severity === "error") ? "unresolved" as const : "satisfied" as const }; }), evaluations: evaluationHistory };
           delivery.trace = trace;
           await this.journal.record(task, "mission.completed", delivery.summary, { previewUrl: delivery.previewUrl, artifacts: delivery.artifacts, completedAt: delivery.completedAt });
           return delivery;
