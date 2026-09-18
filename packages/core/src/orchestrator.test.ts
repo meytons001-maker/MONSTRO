@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { FilePatch, MonstroTask } from "@monstro/contracts";
+import type { Evidence, FilePatch, MonstroTask } from "@monstro/contracts";
 import { MissionJournal, MonstroOrchestrator, type MonstroServices } from "./index.js";
 
 function task(): MonstroTask {
@@ -19,10 +19,11 @@ function task(): MonstroTask {
 test("orchestrator repairs a failed observation and delivers on the next iteration", async () => {
   let artifact = "BROKEN";
   const applied: FilePatch[] = [];
+  const evaluatedEvidence: Evidence[][] = [];
   const journal = new MissionJournal();
 
   const services: MonstroServices = {
-    inspector: { async inspect() { return [{ source: "intent", kind: "user", summary: "fixture" }]; } },
+    inspector: { async inspect() { return [{ source: "reference:experience", kind: "reference", summary: "fixture reference profile", data: { canvasCount: 1 } }]; } },
     architect: { async plan(current) { return { taskId: current.id, rationale: "test repair loop", steps: [{ id: "build", title: "Build", description: "fixture", status: "pending" }] }; } },
     builder: {
       async build() { return [{ path: "preview.html", operation: "create", content: artifact }]; },
@@ -36,6 +37,7 @@ test("orchestrator repairs a failed observation and delivers on the next iterati
     observer: { async observe() { return { ok: true, durationMs: 1, evidence: [{ source: "document.title", kind: "runtime", summary: artifact }] }; } },
     evaluator: {
       async evaluate(_current, _runtime, evidence) {
+        evaluatedEvidence.push(evidence);
         const valid = evidence.some((item) => item.source === "document.title" && item.summary === "MONSTRO Preview");
         return valid
           ? { accepted: true, score: 1, findings: [], nextActions: [] }
@@ -54,6 +56,9 @@ test("orchestrator repairs a failed observation and delivers on the next iterati
   assert.equal(current.iteration, 2);
   assert.equal(artifact, "MONSTRO Preview");
   assert.equal(applied.length, 2);
+  assert.equal(evaluatedEvidence.length, 2);
+  assert.ok(evaluatedEvidence.every((items) => items.some((item) => item.source === "reference:experience")));
+  assert.ok(evaluatedEvidence.every((items) => items.some((item) => item.source === "document.title")));
   assert.equal(events.filter((event) => event.type === "iteration.started").length, 2);
   assert.equal(events.filter((event) => event.type === "repair.completed").length, 1);
   assert.equal(events.at(-1)?.type, "mission.completed");
