@@ -69,6 +69,7 @@ export interface EvaluationFinding { code: FindingCode; message: string; severit
 export interface RepairAction { id: string; findingCode: FindingCode; description: string; targetPath?: string; requirementIds?: string[]; }
 export interface EvaluationEvidenceTrace { requirementId: string; evidenceSources: string[]; }
 export interface Evaluation { accepted: boolean; score: number; findings: EvaluationFinding[]; nextActions: RepairAction[]; evidenceTrace?: EvaluationEvidenceTrace[]; }
+export interface EvaluationIterationTrace { iteration: number; accepted: boolean; score: number; evidenceTrace: EvaluationEvidenceTrace[]; findings: EvaluationFinding[]; repairActionIds: string[]; }
 export interface RequirementDeliveryTrace { requirementId: string; buildPaths: string[]; repairPaths: string[]; evidenceSources: string[]; findingCodes: FindingCode[]; status: "satisfied" | "unresolved"; }
-export interface DeliveryTrace { requirements: RequirementDeliveryTrace[]; }
+export interface DeliveryTrace { requirements: RequirementDeliveryTrace[]; evaluations?: EvaluationIterationTrace[]; }
 export interface Delivery { taskId: string; completedAt: string; summary: string; previewUrl?: string; artifacts: string[]; trace?: DeliveryTrace; }
