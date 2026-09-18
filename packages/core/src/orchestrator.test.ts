@@ -34,7 +34,7 @@ test("orchestrator repairs a failed observation and delivers on the next iterati
       },
     },
     runtime: { async run() { return { ok: true, previewUrl: "http://127.0.0.1/", stdout: "", stderr: "", durationMs: 1 }; } },
-    observer: { async observe() { return { ok: true, durationMs: 1, evidence: [{ source: "document.title", kind: "runtime", summary: artifact }] }; } },
+    observer: { async observe() { return { ok: true, durationMs: 1, evidence: [{ source: "document.title", kind: "runtime", summary: artifact, requirementIds: artifact === "MONSTRO Preview" ? ["acceptance:title"] : [] }] }; } },
     evaluator: {
       async evaluate(_current, _runtime, evidence) {
         evaluatedEvidence.push(evidence);
@@ -53,7 +53,7 @@ test("orchestrator repairs a failed observation and delivers on the next iterati
   const events = journal.snapshot();
 
   assert.equal(delivery.summary, "delivered after repair");
-  assert.deepEqual(delivery.trace?.requirements, [{ requirementId: "acceptance:title", buildPaths: ["preview.html"], repairPaths: ["preview.html"], evidenceSources: [], findingCodes: [], status: "satisfied" }]);
+  assert.deepEqual(delivery.trace?.requirements, [{ requirementId: "acceptance:title", buildPaths: ["preview.html"], repairPaths: ["preview.html"], evidenceSources: ["document.title"], findingCodes: [], status: "satisfied" }]);
   assert.equal(current.iteration, 2);
   assert.equal(artifact, "MONSTRO Preview");
   assert.equal(applied.length, 2);
