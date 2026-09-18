@@ -24,7 +24,7 @@ test("orchestrator repairs a failed observation and delivers on the next iterati
 
   const services: MonstroServices = {
     inspector: { async inspect() { return [{ source: "reference:experience", kind: "visual", summary: "fixture reference profile", data: { canvasCount: 1 } }]; } },
-    architect: { async plan(current) { return { taskId: current.id, rationale: "test repair loop", steps: [{ id: "build", title: "Build", description: "fixture", status: "pending" }] }; } },
+    architect: { async plan(current) { return { taskId: current.id, rationale: "test repair loop", requirements: [], steps: [{ id: "build", title: "Build", description: "fixture", status: "pending" }] }; } },
     builder: {
       async build() { return [{ path: "preview.html", operation: "create", content: artifact }]; },
       async apply(_current, patches) {
