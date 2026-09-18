@@ -9,6 +9,7 @@ import { evaluateAcceptance } from "@monstro/evaluator";
 import { ControlledBrowserInspector, extractPublicHttpUrl, PublicUrlInspector } from "@monstro/inspector";
 import { HttpPreviewObserver } from "@monstro/observer";
 import { LocalSandboxRuntime, ProjectWorkspace, type PreviewHandle } from "@monstro/runtime";
+import { classifyMission } from "./mission-profile";
 import { previewRegistry } from "./preview-registry";
 
 const EXPECTED_TITLE = "MONSTRO Preview";
@@ -16,7 +17,27 @@ const EXPECTED_HEADING = "MONSTRO LIVE PREVIEW";
 
 function previewServer(intent: string, title = EXPECTED_TITLE, heading = EXPECTED_HEADING) { const safeIntent = JSON.stringify(intent.slice(0, 160)); return `import http from 'node:http';\nconst intent=${safeIntent};\nconst args=process.argv.slice(2);\nconst value=(name,fallback)=>{const i=args.indexOf(name);return i>=0?args[i+1]:fallback};\nconst port=Number(value('--port',process.env.PORT||'3000'));\nconst host=value('--host',process.env.HOST||'127.0.0.1');\nconst html=\`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${title}</title><style>html,body{margin:0;min-height:100%;background:#070a08;color:#eef3ee;font-family:system-ui}main{min-height:100vh;display:grid;place-items:center;background:radial-gradient(circle,#23321e,#070a08 55%)}section{text-align:center;max-width:760px;padding:48px}.mark{font-size:64px;color:#d7ff45}h1{font-size:clamp(30px,6vw,72px);margin:10px 0}p{color:#96a099}</style></head><body><main><section><div class="mark">M</div><h1>${heading}</h1><p>\${intent}</p></section></main></body></html>\`;\nhttp.createServer((req,res)=>{if(req.url==='/health'){res.writeHead(200,{'content-type':'application/json'});res.end(JSON.stringify({ok:true,engine:'MONSTRO'}));return}res.writeHead(200,{'content-type':'text/html; charset=utf-8'});res.end(html)}).listen(port,host,()=>console.log(JSON.stringify({ready:true,host,port})));\n`; }
 
-export function createTask(intent: string): MonstroTask { const id = randomUUID(); const reference = extractPublicHttpUrl(intent); return { id, intent, phase: "understand", context: { projectId: id, rootDir: join(tmpdir(), "monstro-workspaces"), summary: "MONSTRO V0 mission", decisions: [], experienceFidelity: reference ? "required" : "advisory" }, requestedCapabilities: ["filesystem.read", "filesystem.write", "process.execute", ...(reference ? ["network.public" as const, "browser.navigate" as const] : [])], acceptance: [{ id: "preview-ok", description: "Generated web preview must become reachable and structurally valid", required: true, repairTargetPath: "preview.mjs", checks: [{ kind: "runtime.ok" }, { kind: "evidence.exists", source: "preview:document" }, { kind: "evidence.field.equals", source: "preview:document", field: "title", expected: EXPECTED_TITLE }, { kind: "evidence.field.includes", source: "preview:document", field: "h1", expected: EXPECTED_HEADING }, { kind: "evidence.field.min", source: "preview:dom", field: "main", expected: 1 }, { kind: "evidence.field.min", source: "preview:dom", field: "headings", expected: 1 }] }], iteration: 0, maxIterations: 2 }; }
+export function createTask(intent: string): MonstroTask {
+  const id = randomUUID();
+  const reference = extractPublicHttpUrl(intent);
+  const profile = classifyMission(intent, Boolean(reference));
+  return {
+    id,
+    intent,
+    phase: "understand",
+    context: {
+      projectId: id,
+      rootDir: join(tmpdir(), "monstro-workspaces"),
+      summary: `MONSTRO V0 ${profile.id} mission`,
+      decisions: [`Mission profile ${profile.id}: ${profile.rationale}`],
+      experienceFidelity: profile.experienceFidelity,
+    },
+    requestedCapabilities: ["filesystem.read", "filesystem.write", "process.execute", ...(reference ? ["network.public" as const, "browser.navigate" as const] : [])],
+    acceptance: profile.acceptance,
+    iteration: 0,
+    maxIterations: 2,
+  };
+}
 
 function createBrowserInspector(): ControlledBrowserInspector | undefined {
   const executablePath = process.env.MONSTRO_CHROMIUM_PATH?.trim();
