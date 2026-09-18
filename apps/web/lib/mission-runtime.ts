@@ -9,7 +9,7 @@ import { evaluateAcceptance } from "@monstro/evaluator";
 import { ControlledBrowserInspector, extractPublicHttpUrl, PublicUrlInspector } from "@monstro/inspector";
 import { HttpPreviewObserver } from "@monstro/observer";
 import { LocalSandboxRuntime, ProjectWorkspace, type PreviewHandle } from "@monstro/runtime";
-import { classifyMission } from "./mission-profile";
+import { understandMission } from "./mission-profile";
 import { previewRegistry } from "./preview-registry";
 
 const EXPECTED_TITLE = "MONSTRO Preview";
@@ -20,7 +20,7 @@ function previewServer(intent: string, title = EXPECTED_TITLE, heading = EXPECTE
 export function createTask(intent: string): MonstroTask {
   const id = randomUUID();
   const reference = extractPublicHttpUrl(intent);
-  const profile = classifyMission(intent, Boolean(reference));
+  const understanding = understandMission(intent, Boolean(reference));
   return {
     id,
     intent,
@@ -28,12 +28,13 @@ export function createTask(intent: string): MonstroTask {
     context: {
       projectId: id,
       rootDir: join(tmpdir(), "monstro-workspaces"),
-      summary: `MONSTRO V0 ${profile.id} mission`,
-      decisions: [`Mission profile ${profile.id}: ${profile.rationale}`],
-      experienceFidelity: profile.experienceFidelity,
+      summary: `MONSTRO V0 ${understanding.profile} mission`,
+      decisions: [`Mission understanding ${understanding.profile}: ${understanding.rationale}`],
+      experienceFidelity: understanding.experienceFidelity,
+      understanding,
     },
     requestedCapabilities: ["filesystem.read", "filesystem.write", "process.execute", ...(reference ? ["network.public" as const, "browser.navigate" as const] : [])],
-    acceptance: profile.acceptance,
+    acceptance: understanding.acceptance,
     iteration: 0,
     maxIterations: 2,
   };
@@ -68,7 +69,7 @@ export function createV0Services(task: MonstroTask): MonstroServices {
     builder: { async build(current, plan: BuildPlan) { try { const aiBuild = await generateAiBuild(ai, current, plan); if (aiBuild) { const previewPatch = aiBuild.patches.find((patch) => patch.path === "preview.mjs" && patch.operation !== "delete"); if (!previewPatch) throw new Error("AI Builder must produce preview.mjs for the V0 runtime contract"); current.context.decisions.push(`AI Builder generated ${aiBuild.patches.length} patch(es) with ${aiBuild.provider}/${aiBuild.model}`); return aiBuild.patches; } } catch (error) { current.context.decisions.push(`AI Builder unavailable; deterministic fallback used: ${error instanceof Error ? error.message : "unknown error"}`); } return [{ path: "preview.mjs", operation: "create", content: previewServer(current.intent) }]; }, async apply(current, patches) { await workspace.apply(patches); current.context.decisions.push(`Applied ${patches.length} patch(es) to isolated workspace`); } },
     runtime: { async run(): Promise<RuntimeResult> { if (preview) await preview.stop(); const started = Date.now(); preview = await sandbox.startPreview({ command: "node", args: ["preview.mjs"], healthPath: "/health", startupTimeoutMs: 5_000 }); await previewRegistry.register(task.id, preview); return { ok: true, previewUrl: `/api/previews/${task.id}/`, stdout: preview.stdout, stderr: preview.stderr, durationMs: Date.now() - started }; } },
     observer: { async observe(_current, runtime) { if (!preview) return { ok: false, evidence: [{ source: "runtime", kind: "runtime", summary: runtime.stderr || "Preview unavailable" }], durationMs: 0 }; return httpObserver.observe(preview.url, runtime); } },
-    evaluator: { async evaluate(current, runtime, evidence) { return evaluateAcceptance(current.acceptance, runtime, evidence, { experienceFidelity: current.context.experienceFidelity }); } },
+    evaluator: { async evaluate(current, runtime, evidence) { return evaluateAcceptance(current.acceptance, runtime, evidence, { experienceFidelity: current.context.understanding?.experienceFidelity ?? current.context.experienceFidelity }); } },
     repairer: { async repair(current, evaluation): Promise<FilePatch[]> { const canRepairDocument = evaluation.nextActions.some((action) => action.targetPath === "preview.mjs"); if (!canRepairDocument) return []; try { const artifact = await workspace.read("preview.mjs"); const aiRepair = await generateAiRepair(ai, current, evaluation, [{ path: "preview.mjs", content: artifact }]); if (aiRepair) { const previewPatch = aiRepair.patches.find((patch) => patch.path === "preview.mjs" && patch.operation !== "delete"); if (!previewPatch) throw new Error("AI Repairer must preserve preview.mjs for the V0 runtime contract"); current.context.decisions.push(`AI Repairer generated ${aiRepair.patches.length} patch(es) with ${aiRepair.provider}/${aiRepair.model}`); return aiRepair.patches; } } catch (error) { current.context.decisions.push(`AI Repairer unavailable; deterministic fallback used: ${error instanceof Error ? error.message : "unknown error"}`); } current.context.decisions.push(`Repairing preview.mjs from findings: ${evaluation.findings.map((finding) => finding.code).join(", ")}`); return [{ path: "preview.mjs", operation: "update", content: previewServer(current.intent) }]; } },
     exporter: { async deliver(current, runtime) { return { taskId: current.id, completedAt: new Date().toISOString(), summary: "MONSTRO generated, observed, evaluated and can repair its web preview", previewUrl: runtime.previewUrl, artifacts: ["preview.mjs"] }; } },
   };
