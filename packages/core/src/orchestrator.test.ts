@@ -24,9 +24,9 @@ test("orchestrator repairs a failed observation and delivers on the next iterati
 
   const services: MonstroServices = {
     inspector: { async inspect() { return [{ source: "reference:experience", kind: "visual", summary: "fixture reference profile", data: { canvasCount: 1 } }]; } },
-    architect: { async plan(current) { return { taskId: current.id, rationale: "test repair loop", requirements: [], steps: [{ id: "build", title: "Build", description: "fixture", status: "pending" }] }; } },
+    architect: { async plan(current) { return { taskId: current.id, rationale: "test repair loop", requirements: [{ id: "acceptance:title", description: "preview title is valid", source: "acceptance", required: true }], steps: [{ id: "build", title: "Build", description: "fixture", status: "pending" }] }; } },
     builder: {
-      async build() { return [{ path: "preview.html", operation: "create", content: artifact }]; },
+      async build() { return [{ path: "preview.html", operation: "create", content: artifact, requirementIds: ["acceptance:title"] }]; },
       async apply(_current, patches) {
         applied.push(...patches);
         const patch = patches.find((candidate) => candidate.path === "preview.html");
@@ -41,10 +41,10 @@ test("orchestrator repairs a failed observation and delivers on the next iterati
         const valid = evidence.some((item) => item.source === "document.title" && item.summary === "MONSTRO Preview");
         return valid
           ? { accepted: true, score: 1, findings: [], nextActions: [] }
-          : { accepted: false, score: 0, findings: [{ code: "document.title", message: "invalid title", severity: "error", evidenceSource: "document.title" }], nextActions: [{ id: "fix-title", findingCode: "document.title", description: "repair title", targetPath: "preview.html" }] };
+          : { accepted: false, score: 0, findings: [{ code: "document.title", message: "invalid title", severity: "error", evidenceSource: "document.title", requirementIds: ["acceptance:title"] }], nextActions: [{ id: "fix-title", findingCode: "document.title", description: "repair title", targetPath: "preview.html", requirementIds: ["acceptance:title"] }] };
       },
     },
-    repairer: { async repair() { return [{ path: "preview.html", operation: "update", content: "MONSTRO Preview" }]; } },
+    repairer: { async repair() { return [{ path: "preview.html", operation: "update", content: "MONSTRO Preview", requirementIds: ["acceptance:title"] }]; } },
     exporter: { async deliver(current) { return { taskId: current.id, completedAt: "2026-09-16T00:00:00.000Z", summary: "delivered after repair", artifacts: ["preview.html"] }; } },
   };
 
@@ -59,6 +59,10 @@ test("orchestrator repairs a failed observation and delivers on the next iterati
   assert.equal(evaluatedEvidence.length, 2);
   assert.ok(evaluatedEvidence.every((items) => items.some((item) => item.source === "reference:experience")));
   assert.ok(evaluatedEvidence.every((items) => items.some((item) => item.source === "document.title")));
+  const buildEvent = events.find((event) => event.type === "build.applied");
+  const repairEvent = events.find((event) => event.type === "repair.completed");
+  assert.deepEqual(buildEvent?.data?.requirementIds, ["acceptance:title"]);
+  assert.deepEqual(repairEvent?.data?.requirementIds, ["acceptance:title"]);
   assert.equal(events.filter((event) => event.type === "iteration.started").length, 2);
   assert.equal(events.filter((event) => event.type === "repair.completed").length, 1);
   assert.equal(events.at(-1)?.type, "mission.completed");
