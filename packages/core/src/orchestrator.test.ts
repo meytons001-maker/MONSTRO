@@ -34,14 +34,14 @@ test("orchestrator repairs a failed observation and delivers on the next iterati
       },
     },
     runtime: { async run() { return { ok: true, previewUrl: "http://127.0.0.1/", stdout: "", stderr: "", durationMs: 1 }; } },
-    observer: { async observe() { return { ok: true, durationMs: 1, evidence: [{ source: "document.title", kind: "runtime", summary: artifact, requirementIds: artifact === "MONSTRO Preview" ? ["acceptance:title"] : [] }] }; } },
+    observer: { async observe() { return { ok: true, durationMs: 1, evidence: [{ source: "document.title", kind: "runtime", summary: artifact }] }; } },
     evaluator: {
       async evaluate(_current, _runtime, evidence) {
         evaluatedEvidence.push(evidence);
         const valid = evidence.some((item) => item.source === "document.title" && item.summary === "MONSTRO Preview");
         return valid
-          ? { accepted: true, score: 1, findings: [], nextActions: [] }
-          : { accepted: false, score: 0, findings: [{ code: "document.title", message: "invalid title", severity: "error", evidenceSource: "document.title", requirementIds: ["acceptance:title"] }], nextActions: [{ id: "fix-title", findingCode: "document.title", description: "repair title", targetPath: "preview.html", requirementIds: ["acceptance:title"] }] };
+          ? { accepted: true, score: 1, findings: [], nextActions: [], evidenceTrace: [{ requirementId: "acceptance:title", evidenceSources: ["document.title"] }] }
+          : { accepted: false, score: 0, findings: [{ code: "document.title", message: "invalid title", severity: "error", evidenceSource: "document.title", requirementIds: ["acceptance:title"] }], nextActions: [{ id: "fix-title", findingCode: "document.title", description: "repair title", targetPath: "preview.html", requirementIds: ["acceptance:title"] }], evidenceTrace: [] };
       },
     },
     repairer: { async repair() { return [{ path: "preview.html", operation: "update", content: "MONSTRO Preview", requirementIds: ["acceptance:title"] }]; } },
@@ -60,6 +60,7 @@ test("orchestrator repairs a failed observation and delivers on the next iterati
   assert.equal(evaluatedEvidence.length, 2);
   assert.ok(evaluatedEvidence.every((items) => items.some((item) => item.source === "reference:experience")));
   assert.ok(evaluatedEvidence.every((items) => items.some((item) => item.source === "document.title")));
+  assert.ok(evaluatedEvidence.every((items) => items.every((item) => item.requirementIds === undefined)));
   const buildEvent = events.find((event) => event.type === "build.applied");
   const repairEvent = events.find((event) => event.type === "repair.completed");
   assert.deepEqual(buildEvent?.data?.requirementIds, ["acceptance:title"]);
