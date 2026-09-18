@@ -20,3 +20,17 @@ test("collector aggregates immutable build, repair and evaluation provenance", (
   assert.deepEqual(trace.requirements, [{ requirementId: "acceptance:title", buildPaths: ["preview.html"], repairPaths: ["preview.html"], evidenceSources: ["document.title"], findingCodes: ["document.title"], status: "satisfied" }]);
   assert.deepEqual(trace.evaluations?.map((item) => ({ iteration: item.iteration, accepted: item.accepted, repairActionIds: item.repairActionIds })), [{ iteration: 1, accepted: false, repairActionIds: ["fix-title"] }, { iteration: 2, accepted: true, repairActionIds: [] }]);
 });
+
+test("snapshot exposes current trace state without leaking mutable collector state", () => {
+  const collector = new MissionTraceCollector();
+  collector.recordBuild([{ path: "preview.html", operation: "create", content: "bad", requirementIds: ["acceptance:title"] }]);
+  collector.recordEvaluation(1, failed);
+
+  const snapshot = collector.snapshot();
+  snapshot.buildPatches[0]!.requirementIds!.push("external-mutation");
+  snapshot.evaluations[0]!.repairActionIds.push("external-action");
+
+  const fresh = collector.snapshot();
+  assert.deepEqual(fresh.buildPatches[0]?.requirementIds, ["acceptance:title"]);
+  assert.deepEqual(fresh.evaluations[0]?.repairActionIds, ["fix-title"]);
+});
