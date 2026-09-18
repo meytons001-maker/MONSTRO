@@ -19,6 +19,12 @@ export interface MissionTraceSnapshot {
   evaluations: EvaluationIterationTrace[];
 }
 
+export interface MissionTraceProgress {
+  build: Array<{ path: string; operation: FilePatch["operation"]; requirementIds: string[] }>;
+  repairs: Array<{ path: string; operation: FilePatch["operation"]; requirementIds: string[] }>;
+  evaluations: Array<{ iteration: number; accepted: boolean; score: number; requirementIds: string[]; findingCodes: string[]; repairActionIds: string[] }>;
+}
+
 export class MissionTraceCollector {
   private readonly buildPatches: FilePatch[] = [];
   private readonly repairPatches: FilePatch[] = [];
@@ -48,6 +54,25 @@ export class MissionTraceCollector {
       buildPatches: this.buildPatches.map(clonePatch),
       repairPatches: this.repairPatches.map(clonePatch),
       evaluations: this.evaluations.map(cloneEvaluation),
+    };
+  }
+
+  progress(): MissionTraceProgress {
+    const patchSummary = (patch: FilePatch) => ({ path: patch.path, operation: patch.operation, requirementIds: [...(patch.requirementIds ?? [])] });
+    return {
+      build: this.buildPatches.map(patchSummary),
+      repairs: this.repairPatches.map(patchSummary),
+      evaluations: this.evaluations.map((evaluation) => ({
+        iteration: evaluation.iteration,
+        accepted: evaluation.accepted,
+        score: evaluation.score,
+        requirementIds: [...new Set([
+          ...evaluation.evidenceTrace.map((trace) => trace.requirementId),
+          ...evaluation.findings.flatMap((finding) => finding.requirementIds ?? []),
+        ])],
+        findingCodes: [...new Set(evaluation.findings.map((finding) => finding.code))],
+        repairActionIds: [...evaluation.repairActionIds],
+      })),
     };
   }
 
