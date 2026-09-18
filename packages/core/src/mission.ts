@@ -4,6 +4,7 @@ export type MissionEventType =
   | "phase.changed"
   | "iteration.started"
   | "observation.completed"
+  | "build.applied"
   | "repair.completed"
   | "mission.completed"
   | "mission.failed";
