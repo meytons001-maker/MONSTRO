@@ -43,14 +43,19 @@ export async function generateAiBuild(router: ModelRouter, task: MonstroTask, pl
   if (router.list("code").length === 0) return undefined;
   const response = await router.generate({
     capability: "code",
-    system: "You are the MONSTRO Builder. Return only JSON. Produce minimal project file patches for an isolated authorized workspace. Never request credentials, bypass authentication/DRM, escape the workspace, modify .git, or propose unauthorized access.",
+    system: "You are the MONSTRO Builder. Return only JSON. Produce minimal project file patches for an isolated authorized workspace. Implement the supplied build requirements, prioritizing required requirements. Never request credentials, bypass authentication/DRM, escape the workspace, modify .git, or propose unauthorized access.",
     prompt: JSON.stringify({
       intent: task.intent,
+      understanding: task.context.understanding,
       acceptance: task.acceptance,
-      plan: { rationale: plan.rationale, steps: plan.steps.map(({ title, description }) => ({ title, description })) },
+      plan: {
+        rationale: plan.rationale,
+        requirements: plan.requirements,
+        steps: plan.steps.map(({ title, description }) => ({ title, description })),
+      },
       responseSchema: { patches: [{ path: "relative/path", operation: "create|update|delete", content: "required except delete" }] },
     }),
-    metadata: { taskId: task.id, phase: "build" },
+    metadata: { taskId: task.id, phase: "build", requirementIds: plan.requirements.map((requirement) => requirement.id) },
   });
   const parsed = parseJson(response.output);
   if (!parsed || typeof parsed !== "object" || !Array.isArray((parsed as { patches?: unknown }).patches)) throw new Error("AI Builder response must contain a patches array");
