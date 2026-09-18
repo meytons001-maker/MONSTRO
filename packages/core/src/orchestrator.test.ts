@@ -16,7 +16,7 @@ function task(): MonstroTask {
   };
 }
 
-test("orchestrator repairs a failed observation and delivers on the next iteration", async () => {
+test("orchestrator preserves failed and successful evaluations in delivery trace", async () => {
   let artifact = "BROKEN";
   const applied: FilePatch[] = [];
   const evaluatedEvidence: Evidence[][] = [];
@@ -53,7 +53,11 @@ test("orchestrator repairs a failed observation and delivers on the next iterati
   const events = journal.snapshot();
 
   assert.equal(delivery.summary, "delivered after repair");
-  assert.deepEqual(delivery.trace?.requirements, [{ requirementId: "acceptance:title", buildPaths: ["preview.html"], repairPaths: ["preview.html"], evidenceSources: ["document.title"], findingCodes: [], status: "satisfied" }]);
+  assert.deepEqual(delivery.trace?.requirements, [{ requirementId: "acceptance:title", buildPaths: ["preview.html"], repairPaths: ["preview.html"], evidenceSources: ["document.title"], findingCodes: ["document.title"], status: "satisfied" }]);
+  assert.deepEqual(delivery.trace?.evaluations, [
+    { iteration: 1, accepted: false, score: 0, evidenceTrace: [], findings: [{ code: "document.title", message: "invalid title", severity: "error", evidenceSource: "document.title", requirementIds: ["acceptance:title"] }], repairActionIds: ["fix-title"] },
+    { iteration: 2, accepted: true, score: 1, evidenceTrace: [{ requirementId: "acceptance:title", evidenceSources: ["document.title"] }], findings: [], repairActionIds: [] },
+  ]);
   assert.equal(current.iteration, 2);
   assert.equal(artifact, "MONSTRO Preview");
   assert.equal(applied.length, 2);
