@@ -41,8 +41,14 @@ export interface MissionUnderstanding {
 export interface ProjectContext { projectId: string; rootDir: string; summary: string; decisions: string[]; experienceFidelity?: ExperienceFidelity; understanding?: MissionUnderstanding; }
 export interface MonstroTask { id: string; intent: string; phase: TaskPhase; context: ProjectContext; requestedCapabilities: Capability[]; acceptance: AcceptanceCriterion[]; iteration: number; maxIterations: number; }
 export interface Evidence { source: string; kind: "code" | "runtime" | "visual" | "network" | "user"; summary: string; data?: unknown; }
+export interface BuildRequirement {
+  id: string;
+  description: string;
+  source: "understanding" | "acceptance";
+  required: boolean;
+}
 export interface BuildPlanStep { id: string; title: string; description: string; status: "pending" | "running" | "done" | "failed"; }
-export interface BuildPlan { taskId: string; rationale: string; steps: BuildPlanStep[]; }
+export interface BuildPlan { taskId: string; rationale: string; requirements: BuildRequirement[]; steps: BuildPlanStep[]; }
 export interface FilePatch { path: string; operation: "create" | "update" | "delete"; content?: string; }
 export interface RuntimeResult { ok: boolean; previewUrl?: string; stdout: string; stderr: string; durationMs: number; }
 
