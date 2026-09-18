@@ -1,6 +1,8 @@
-import type { BuildPlan, Delivery, DeliveryTrace, Evaluation, EvaluationIterationTrace, Evidence, FilePatch, MonstroTask, ObservationResult, RuntimeResult, TaskPhase } from "@monstro/contracts";
+import type { BuildPlan, Delivery, Evaluation, Evidence, FilePatch, MonstroTask, ObservationResult, RuntimeResult, TaskPhase } from "@monstro/contracts";
 import { MissionJournal } from "./mission.ts";
+import { MissionTraceCollector } from "./trace.ts";
 export * from "./mission.ts";
+export * from "./trace.ts";
 
 export interface Inspector { inspect(task: MonstroTask): Promise<Evidence[]>; }
 export interface Architect { plan(task: MonstroTask, evidence: Evidence[]): Promise<BuildPlan>; }
@@ -18,9 +20,7 @@ export class MonstroOrchestrator {
   private async phase(task: MonstroTask, phase: TaskPhase, detail?: string): Promise<void> { task.phase = phase; await this.journal.record(task, "phase.changed", detail); }
 
   async execute(task: MonstroTask): Promise<Delivery> {
-    const appliedBuildPatches: FilePatch[] = [];
-    const appliedRepairPatches: FilePatch[] = [];
-    const evaluationHistory: EvaluationIterationTrace[] = [];
+    const trace = new MissionTraceCollector();
     try {
       await this.phase(task, "inspect");
       const initialEvidence = await this.services.inspector.inspect(task);
@@ -29,7 +29,7 @@ export class MonstroOrchestrator {
       await this.phase(task, "build", `${plan.steps.length} plan step(s)`);
       const buildPatches = await this.services.builder.build(task, plan);
       await this.services.builder.apply(task, buildPatches);
-      appliedBuildPatches.push(...buildPatches);
+      trace.recordBuild(buildPatches);
       await this.journal.record(task, "build.applied", `${buildPatches.length} patch(es)`, { paths: buildPatches.map((patch) => patch.path), requirementIds: [...new Set(buildPatches.flatMap((patch) => patch.requirementIds ?? []))], patches: buildPatches.map((patch) => ({ path: patch.path, operation: patch.operation, requirementIds: patch.requirementIds ?? [] })) });
 
       while (task.iteration < task.maxIterations) {
@@ -41,16 +41,13 @@ export class MonstroOrchestrator {
         const observation = await this.services.observer.observe(task, runtime);
         await this.journal.record(task, "observation.completed", `${observation.evidence.length} evidence item(s)`, { ok: observation.ok, durationMs: observation.durationMs });
         await this.phase(task, "evaluate", observation.ok ? "observation ok" : "observation failed");
-        const evaluationEvidence = [...initialEvidence, ...observation.evidence];
-        const evaluation = await this.services.evaluator.evaluate(task, runtime, evaluationEvidence);
-        evaluationHistory.push({ iteration: task.iteration, accepted: evaluation.accepted, score: evaluation.score, evidenceTrace: (evaluation.evidenceTrace ?? []).map((trace) => ({ requirementId: trace.requirementId, evidenceSources: [...trace.evidenceSources] })), findings: evaluation.findings.map((finding) => ({ ...finding, requirementIds: finding.requirementIds ? [...finding.requirementIds] : undefined })), repairActionIds: evaluation.nextActions.map((action) => action.id) });
+        const evaluation = await this.services.evaluator.evaluate(task, runtime, [...initialEvidence, ...observation.evidence]);
+        trace.recordEvaluation(task.iteration, evaluation);
 
         if (runtime.ok && observation.ok && evaluation.accepted) {
           await this.phase(task, "deliver", `score ${evaluation.score}`);
           const delivery = await this.services.exporter.deliver(task, runtime, evaluation);
-          const requirementIds = new Set([...plan.requirements.map((requirement) => requirement.id), ...appliedBuildPatches.flatMap((patch) => patch.requirementIds ?? []), ...appliedRepairPatches.flatMap((patch) => patch.requirementIds ?? []), ...evaluationHistory.flatMap((item) => item.evidenceTrace.map((trace) => trace.requirementId))]);
-          const trace: DeliveryTrace = { requirements: [...requirementIds].map((requirementId) => { const historicalFindings = evaluationHistory.flatMap((item) => item.findings).filter((finding) => finding.requirementIds?.includes(requirementId)); const historicalSources = evaluationHistory.flatMap((item) => item.evidenceTrace.filter((trace) => trace.requirementId === requirementId).flatMap((trace) => trace.evidenceSources)); const finalFindings = evaluation.findings.filter((finding) => finding.requirementIds?.includes(requirementId)); return { requirementId, buildPaths: [...new Set(appliedBuildPatches.filter((patch) => patch.requirementIds?.includes(requirementId)).map((patch) => patch.path))], repairPaths: [...new Set(appliedRepairPatches.filter((patch) => patch.requirementIds?.includes(requirementId)).map((patch) => patch.path))], evidenceSources: [...new Set([...historicalSources, ...historicalFindings.flatMap((finding) => finding.evidenceSource ? [finding.evidenceSource] : [])])], findingCodes: [...new Set(historicalFindings.map((finding) => finding.code))], status: finalFindings.some((finding) => finding.severity === "error") ? "unresolved" as const : "satisfied" as const }; }), evaluations: evaluationHistory };
-          delivery.trace = trace;
+          delivery.trace = trace.build(plan, evaluation);
           await this.journal.record(task, "mission.completed", delivery.summary, { previewUrl: delivery.previewUrl, artifacts: delivery.artifacts, completedAt: delivery.completedAt });
           return delivery;
         }
@@ -61,7 +58,7 @@ export class MonstroOrchestrator {
         await this.journal.record(task, "repair.completed", `${patches.length} patch(es)`, { actions: evaluation.nextActions.map((action) => action.id), paths: patches.map((patch) => patch.path), requirementIds: [...new Set(patches.flatMap((patch) => patch.requirementIds ?? []))], patches: patches.map((patch) => ({ path: patch.path, operation: patch.operation, requirementIds: patch.requirementIds ?? [] })) });
         if (patches.length === 0) break;
         await this.services.builder.apply(task, patches);
-        appliedRepairPatches.push(...patches);
+        trace.recordRepair(patches);
       }
       throw new Error(`MONSTRO could not satisfy task ${task.id} after ${task.iteration} iterations`);
     } catch (error) {
