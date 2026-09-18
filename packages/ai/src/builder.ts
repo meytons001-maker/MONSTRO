@@ -11,7 +11,7 @@ export interface AiBuildResult {
   patches: FilePatch[];
 }
 
-type RawPatch = { path?: unknown; operation?: unknown; content?: unknown };
+type RawPatch = { path?: unknown; operation?: unknown; content?: unknown; requirementIds?: unknown };
 
 function parseJson(output: string): unknown {
   const trimmed = output.trim();
@@ -30,20 +30,30 @@ function safeRelativePath(value: unknown): string {
   return path;
 }
 
-function normalizePatch(value: RawPatch): FilePatch {
+function normalizeRequirementIds(value: unknown, allowed: Set<string>, path: string): string[] {
+  if (!Array.isArray(value) || value.length === 0) throw new Error(`AI Builder requirementIds are required for ${path}`);
+  const ids = value.map((id) => {
+    if (typeof id !== "string" || !allowed.has(id)) throw new Error(`AI Builder requirementId is invalid for ${path}: ${String(id)}`);
+    return id;
+  });
+  return [...new Set(ids)];
+}
+
+function normalizePatch(value: RawPatch, allowedRequirementIds: Set<string>): FilePatch {
   const path = safeRelativePath(value.path);
+  const requirementIds = normalizeRequirementIds(value.requirementIds, allowedRequirementIds, path);
   if (value.operation !== "create" && value.operation !== "update" && value.operation !== "delete") throw new Error(`AI Builder operation is invalid for ${path}`);
-  if (value.operation === "delete") return { path, operation: "delete" };
+  if (value.operation === "delete") return { path, operation: "delete", requirementIds };
   if (typeof value.content !== "string") throw new Error(`AI Builder content is required for ${path}`);
   if (Buffer.byteLength(value.content, "utf8") > MAX_CONTENT_BYTES) throw new Error(`AI Builder content is too large for ${path}`);
-  return { path, operation: value.operation, content: value.content };
+  return { path, operation: value.operation, content: value.content, requirementIds };
 }
 
 export async function generateAiBuild(router: ModelRouter, task: MonstroTask, plan: BuildPlan): Promise<AiBuildResult | undefined> {
   if (router.list("code").length === 0) return undefined;
   const response = await router.generate({
     capability: "code",
-    system: "You are the MONSTRO Builder. Return only JSON. Produce minimal project file patches for an isolated authorized workspace. Implement the supplied build requirements, prioritizing required requirements. Never request credentials, bypass authentication/DRM, escape the workspace, modify .git, or propose unauthorized access.",
+    system: "You are the MONSTRO Builder. Return only JSON. Produce minimal project file patches for an isolated authorized workspace. Implement the supplied build requirements, prioritizing required requirements. Every patch must declare one or more requirementIds from the supplied plan that explain why the patch exists. Never request credentials, bypass authentication/DRM, escape the workspace, modify .git, or propose unauthorized access.",
     prompt: JSON.stringify({
       intent: task.intent,
       understanding: task.context.understanding,
@@ -53,7 +63,7 @@ export async function generateAiBuild(router: ModelRouter, task: MonstroTask, pl
         requirements: plan.requirements,
         steps: plan.steps.map(({ title, description }) => ({ title, description })),
       },
-      responseSchema: { patches: [{ path: "relative/path", operation: "create|update|delete", content: "required except delete" }] },
+      responseSchema: { patches: [{ path: "relative/path", operation: "create|update|delete", content: "required except delete", requirementIds: ["one or more IDs from plan.requirements"] }] },
     }),
     metadata: { taskId: task.id, phase: "build", requirementIds: plan.requirements.map((requirement) => requirement.id) },
   });
@@ -61,7 +71,8 @@ export async function generateAiBuild(router: ModelRouter, task: MonstroTask, pl
   if (!parsed || typeof parsed !== "object" || !Array.isArray((parsed as { patches?: unknown }).patches)) throw new Error("AI Builder response must contain a patches array");
   const raw = (parsed as { patches: RawPatch[] }).patches;
   if (raw.length === 0 || raw.length > MAX_PATCHES) throw new Error(`AI Builder must return between 1 and ${MAX_PATCHES} patches`);
-  const patches = raw.map(normalizePatch);
+  const allowedRequirementIds = new Set(plan.requirements.map((requirement) => requirement.id));
+  const patches = raw.map((patch) => normalizePatch(patch, allowedRequirementIds));
   const unique = new Set(patches.map((patch) => patch.path));
   if (unique.size !== patches.length) throw new Error("AI Builder returned duplicate patch paths");
   return { provider: response.provider, model: response.model, patches };
