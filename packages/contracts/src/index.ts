@@ -29,7 +29,16 @@ export type AcceptanceCheck =
 
 export interface AcceptanceCriterion { id: string; description: string; required: boolean; checks?: AcceptanceCheck[]; repairTargetPath?: string; }
 export type ExperienceFidelity = "advisory" | "required";
-export interface ProjectContext { projectId: string; rootDir: string; summary: string; decisions: string[]; experienceFidelity?: ExperienceFidelity; }
+export type MissionProfileId = "web" | "interactive-web";
+export interface MissionUnderstanding {
+  profile: MissionProfileId;
+  artifact: "web-preview";
+  interactivity: "structural" | "interactive";
+  experienceFidelity: ExperienceFidelity;
+  rationale: string;
+  acceptance: AcceptanceCriterion[];
+}
+export interface ProjectContext { projectId: string; rootDir: string; summary: string; decisions: string[]; experienceFidelity?: ExperienceFidelity; understanding?: MissionUnderstanding; }
 export interface MonstroTask { id: string; intent: string; phase: TaskPhase; context: ProjectContext; requestedCapabilities: Capability[]; acceptance: AcceptanceCriterion[]; iteration: number; maxIterations: number; }
 export interface Evidence { source: string; kind: "code" | "runtime" | "visual" | "network" | "user"; summary: string; data?: unknown; }
 export interface BuildPlanStep { id: string; title: string; description: string; status: "pending" | "running" | "done" | "failed"; }
