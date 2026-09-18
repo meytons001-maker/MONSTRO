@@ -46,3 +46,28 @@ test("optional failures warn without blocking delivery", () => {
   assert.equal(result.score, 0);
   assert.equal(result.findings[0]?.severity, "warning");
 });
+
+test("compares rendered reference experience with produced preview", () => {
+  const compared: Evidence[] = [
+    ...evidence,
+    { source: "browser:experience", kind: "code", summary: "reference", data: { canvasCount: 1, interactiveRequests: 2, technologies: ["three.js"] } },
+    { source: "preview:experience", kind: "code", summary: "preview", data: { canvasCount: 0, interactiveAssets: 0, technologies: [] } },
+  ];
+  const result = evaluateAcceptance(criteria, runtime, compared);
+  assert.equal(result.accepted, true);
+  assert.deepEqual(result.findings.map((finding) => finding.code), ["experience.canvas.missing", "experience.assets.missing", "experience.technology.missing"]);
+  assert.ok(result.findings.every((finding) => finding.severity === "warning"));
+  assert.equal(result.nextActions.length, 3);
+  assert.ok(result.nextActions.every((action) => action.targetPath === "preview.mjs"));
+});
+
+test("uses static reference profile when browser profile is unavailable", () => {
+  const compared: Evidence[] = [
+    ...evidence,
+    { source: "reference:experience", kind: "code", summary: "reference", data: { canvasCount: 1, interactiveAssets: 1, technologies: ["webassembly"] } },
+    { source: "preview:experience", kind: "code", summary: "preview", data: { canvasCount: 1, interactiveAssets: 1, technologies: ["webassembly"] } },
+  ];
+  const result = evaluateAcceptance(criteria, runtime, compared);
+  assert.equal(result.accepted, true);
+  assert.deepEqual(result.findings, []);
+});

@@ -30,9 +30,22 @@ test("observes document metadata and DOM structure as structured evidence", asyn
     assert.ok(domEvidence, "expected preview:dom evidence");
     const dom = evidenceData(domEvidence.data);
     assert.deepEqual(
-      { html: dom.html, head: dom.head, body: dom.body, main: dom.main, headings: dom.headings, links: dom.links, images: dom.images, scripts: dom.scripts, styles: dom.styles },
-      { html: 1, head: 1, body: 1, main: 1, headings: 1, links: 1, images: 1, scripts: 1, styles: 1 },
+      { html: dom.html, head: dom.head, body: dom.body, main: dom.main, headings: dom.headings, links: dom.links, images: dom.images, scripts: dom.scripts, styles: dom.styles, canvas: dom.canvas },
+      { html: 1, head: 1, body: 1, main: 1, headings: 1, links: 1, images: 1, scripts: 1, styles: 1, canvas: 0 },
     );
+  } finally { await fixture.close(); }
+});
+
+test("profiles interactive signals in the produced preview", async () => {
+  const fixture = await serve("<!doctype html><html><body><canvas></canvas><script src='https://cdn.example/three.min.js'></script><a href='/scene.glb'>scene</a></body></html>");
+  try {
+    const result = await new HttpPreviewObserver().observe(fixture.url, { ok: true, stdout: "", stderr: "", durationMs: 1 });
+    const experience = result.evidence.find((item) => item.source === "preview:experience");
+    assert.ok(experience, "expected preview:experience evidence");
+    const data = evidenceData(experience.data);
+    assert.equal(data.canvasCount, 1);
+    assert.equal(data.interactiveAssets, 1);
+    assert.deepEqual(data.technologies, ["three.js"]);
   } finally { await fixture.close(); }
 });
 

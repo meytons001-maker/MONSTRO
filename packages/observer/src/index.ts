@@ -10,6 +10,23 @@ function countMatches(html: string, pattern: RegExp): number {
   return html.match(pattern)?.length ?? 0;
 }
 
+function profilePreviewExperience(html: string) {
+  const technologies = new Set<string>();
+  const detectors: Array<[string, RegExp]> = [
+    ["three.js", /three(?:\.min)?\.js|three\/build|@react-three\/fiber/i],
+    ["babylon.js", /babylon(?:\.js|js\.com|cdn)/i],
+    ["aframe", /aframe(?:\.min)?\.js|<a-scene\b/i],
+    ["model-viewer", /<model-viewer\b|@google\/model-viewer/i],
+    ["webassembly", /\.wasm(?:[?#"']|$)|webassembly/i],
+  ];
+  for (const [name, pattern] of detectors) if (pattern.test(html)) technologies.add(name);
+  return {
+    canvasCount: countMatches(html, /<canvas\b/gi),
+    interactiveAssets: countMatches(html, /(?:src|href)=["'][^"']+\.(?:glb|gltf|bin|hdr|exr|ktx2|basis|wasm)(?:[?#][^"']*)?["']/gi),
+    technologies: [...technologies],
+  };
+}
+
 export class HttpPreviewObserver {
   constructor(private readonly options: PreviewObservationOptions = {}) {}
 
@@ -40,8 +57,12 @@ export class HttpPreviewObserver {
         images: countMatches(html, /<img\b/gi),
         scripts: countMatches(html, /<script\b/gi),
         styles: countMatches(html, /<style\b/gi),
+        canvas: countMatches(html, /<canvas\b/gi),
       };
-      evidence.push({ source: "preview:dom", kind: "runtime", summary: `DOM structure: ${dom.main} main, ${dom.headings} heading(s), ${dom.links} link(s), ${dom.images} image(s)`, data: dom });
+      evidence.push({ source: "preview:dom", kind: "runtime", summary: `DOM structure: ${dom.main} main, ${dom.headings} heading(s), ${dom.links} link(s), ${dom.images} image(s), ${dom.canvas} canvas`, data: dom });
+
+      const experience = profilePreviewExperience(html);
+      evidence.push({ source: "preview:experience", kind: "code", summary: experience.canvasCount || experience.interactiveAssets || experience.technologies.length ? `Preview experience signals: ${[...experience.technologies, `${experience.canvasCount} canvas`, `${experience.interactiveAssets} interactive asset(s)`].join(", ")}` : "No explicit interactive-engine signals observed in preview HTML", data: experience });
 
       return { ok: response.ok && htmlBytes > 0, evidence, durationMs: Date.now() - started };
     } catch (error) {
