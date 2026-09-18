@@ -34,3 +34,19 @@ test("snapshot exposes current trace state without leaking mutable collector sta
   assert.deepEqual(fresh.buildPatches[0]?.requirementIds, ["acceptance:title"]);
   assert.deepEqual(fresh.evaluations[0]?.repairActionIds, ["fix-title"]);
 });
+
+test("progress exposes transport-safe trace metadata without patch contents", () => {
+  const collector = new MissionTraceCollector();
+  collector.recordBuild([{ path: "preview.html", operation: "create", content: "secret implementation body", requirementIds: ["acceptance:title"] }]);
+  collector.recordEvaluation(1, failed);
+  collector.recordRepair([{ path: "preview.html", operation: "update", content: "replacement body", requirementIds: ["acceptance:title"] }]);
+
+  const progress = collector.progress();
+  assert.deepEqual(progress, {
+    build: [{ path: "preview.html", operation: "create", requirementIds: ["acceptance:title"] }],
+    repairs: [{ path: "preview.html", operation: "update", requirementIds: ["acceptance:title"] }],
+    evaluations: [{ iteration: 1, accepted: false, score: 0, requirementIds: ["acceptance:title"], findingCodes: ["document.title"], repairActionIds: ["fix-title"] }],
+  });
+  assert.equal(JSON.stringify(progress).includes("secret implementation body"), false);
+  assert.equal(JSON.stringify(progress).includes("replacement body"), false);
+});
