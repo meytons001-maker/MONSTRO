@@ -6,6 +6,7 @@ export type AddressResolver = (hostname: string) => Promise<Array<{ address: str
 export interface PublicUrlInspectorOptions { timeoutMs?: number; maxHtmlBytes?: number; maxAssets?: number; fetchImpl?: typeof fetch; resolveImpl?: AddressResolver; }
 export interface ClientAsset { kind: string; url: string; sameOrigin: boolean; }
 export interface ExperienceProfile { canvasCount: number; moduleScripts: number; technologies: string[]; interactiveAssets: number; signals: string[]; }
+export interface RenderedExperienceProfile { canvasCount: number; interactiveRequests: number; technologies: string[]; runtimeErrors: number; signals: string[]; }
 export interface BrowserConsoleEntry { level: "log" | "info" | "warn" | "error"; text: string; }
 export interface BrowserRequestEntry { url: string; method: string; resourceType?: string; status?: number; }
 export interface BrowserSnapshot { url: string; title?: string; h1?: string; html?: string; canvasCount: number; headings: number; console: BrowserConsoleEntry[]; requests: BrowserRequestEntry[]; runtimeErrors: string[]; }
@@ -58,6 +59,19 @@ export function profileWebExperience(html: string, assets: ClientAsset[]): Exper
   return { canvasCount, moduleScripts, technologies: [...technologies], interactiveAssets, signals };
 }
 
+export function profileRenderedExperience(snapshot: BrowserSnapshot, requests: BrowserRequestEntry[]): RenderedExperienceProfile {
+  const technologies = new Set<string>(); const signals: string[] = [];
+  const requestUrls = requests.map((request) => request.url);
+  const haystack = `${snapshot.html ?? ""}\n${requestUrls.join("\n")}`.toLowerCase();
+  const interactiveRequests = requestUrls.filter((url) => INTERACTIVE_ASSET.test(url.split(/[?#]/, 1)[0] ?? "")).length;
+  const detectors: Array<[string, RegExp]> = [["three.js", /three(?:\.min)?\.js|three\/build|@react-three\/fiber/i], ["babylon.js", /babylon(?:\.js|js\.com|cdn)/i], ["aframe", /aframe(?:\.min)?\.js|<a-scene\b/i], ["model-viewer", /<model-viewer\b|@google\/model-viewer/i], ["webassembly", /\.wasm(?:[?#]|$)|webassembly/i]];
+  for (const [name, pattern] of detectors) if (pattern.test(haystack)) technologies.add(name);
+  if (snapshot.canvasCount > 0) signals.push(`${snapshot.canvasCount} rendered canvas element(s)`);
+  if (interactiveRequests > 0) signals.push(`${interactiveRequests} interactive/3D request(s)`);
+  if (snapshot.runtimeErrors.length > 0) signals.push(`${snapshot.runtimeErrors.length} runtime error(s)`);
+  return { canvasCount: snapshot.canvasCount, interactiveRequests, technologies: [...technologies], runtimeErrors: snapshot.runtimeErrors.length, signals };
+}
+
 export class ControlledBrowserInspector {
   private readonly timeoutMs: number; private readonly maxRequests: number; private readonly maxConsoleEntries: number; private readonly createSession: BrowserSessionFactory; private readonly resolveImpl: AddressResolver;
   constructor(options: BrowserInspectorOptions) { this.createSession = options.createSession; this.timeoutMs = options.timeoutMs ?? 8_000; this.maxRequests = options.maxRequests ?? 128; this.maxConsoleEntries = options.maxConsoleEntries ?? 64; this.resolveImpl = options.resolveImpl ?? defaultResolve; }
@@ -69,11 +83,12 @@ export class ControlledBrowserInspector {
       const finalUrl = new URL(snapshot.url); await assertPublicDestination(finalUrl, this.resolveImpl);
       const requests: BrowserRequestEntry[] = [];
       for (const request of snapshot.requests) { if (requests.length >= this.maxRequests) break; let requestUrl: URL; try { requestUrl = new URL(request.url); } catch { continue; } try { await assertPublicDestination(requestUrl, this.resolveImpl); } catch { continue; } requests.push(request); }
-      const consoleEntries = snapshot.console.slice(0, this.maxConsoleEntries); const errors = snapshot.runtimeErrors.slice(0, this.maxConsoleEntries);
+      const consoleEntries = snapshot.console.slice(0, this.maxConsoleEntries); const errors = snapshot.runtimeErrors.slice(0, this.maxConsoleEntries); const profile = profileRenderedExperience({ ...snapshot, runtimeErrors: errors }, requests);
       return [
         { source: "browser:document", kind: "visual", summary: `Rendered document${snapshot.title ? `: ${snapshot.title}` : ""}`, data: { url: finalUrl.toString(), title: snapshot.title, h1: snapshot.h1, canvasCount: snapshot.canvasCount, headings: snapshot.headings } },
         { source: "browser:network", kind: "network", summary: `Observed ${requests.length} public browser request(s)`, data: { requests, truncated: snapshot.requests.length > requests.length } },
         { source: "browser:console", kind: "runtime", summary: errors.length ? `Rendered page reported ${errors.length} runtime error(s)` : `Observed ${consoleEntries.length} console entr${consoleEntries.length === 1 ? "y" : "ies"} without runtime errors`, data: { entries: consoleEntries, runtimeErrors: errors, truncated: snapshot.console.length > consoleEntries.length || snapshot.runtimeErrors.length > errors.length } },
+        { source: "browser:experience", kind: "code", summary: profile.signals.length || profile.technologies.length ? `Rendered experience signals: ${[...profile.technologies, ...profile.signals].join(", ")}` : "No explicit interactive-engine signals observed after rendering", data: profile },
       ];
     } finally { await session.close(); }
   }
