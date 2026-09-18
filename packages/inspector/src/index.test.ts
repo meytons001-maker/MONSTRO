@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ControlledBrowserInspector, PublicUrlInspector, assertPublicDestination, extractPublicHttpUrl, inventoryClientAssets, profileWebExperience, type BrowserSession } from "./index.ts";
+import { ControlledBrowserInspector, PublicUrlInspector, assertPublicDestination, extractPublicHttpUrl, inventoryClientAssets, profileRenderedExperience, profileWebExperience, type BrowserSession } from "./index.ts";
 
 const publicResolver = async () => [{ address: "93.184.216.34", family: 4 }];
 
@@ -42,6 +42,13 @@ test("profiles known declarative 3D engines without claiming runtime execution",
   assert.ok(profile.technologies.includes("aframe")); assert.ok(profile.technologies.includes("model-viewer"));
 });
 
+test("profiles bounded rendered experience signals from observed browser data", () => {
+  const profile = profileRenderedExperience({ url: "https://example.com", html: `<canvas></canvas><model-viewer></model-viewer>`, canvasCount: 1, headings: 0, console: [], requests: [], runtimeErrors: ["shader failed"] }, [{ url: "https://cdn.example.com/scene.glb?rev=1", method: "GET" }, { url: "https://cdn.example.com/runtime.wasm", method: "GET" }]);
+  assert.equal(profile.canvasCount, 1); assert.equal(profile.interactiveRequests, 2); assert.equal(profile.runtimeErrors, 1);
+  assert.ok(profile.technologies.includes("model-viewer")); assert.ok(profile.technologies.includes("webassembly"));
+  assert.ok(profile.signals.includes("2 interactive/3D request(s)"));
+});
+
 test("produces bounded document, network, asset and experience evidence", async () => {
   const inspector = new PublicUrlInspector({ resolveImpl: publicResolver, fetchImpl: async () => new Response("<!doctype html><title>Reference</title><h1>World</h1><canvas></canvas><script type='module' src='/three.js'></script><img src='x'><source src='/scene.glb'>", { status: 200, headers: { "content-type": "text/html" } }) });
   const evidence = await inspector.inspect(new URL("https://example.com"));
@@ -51,14 +58,15 @@ test("produces bounded document, network, asset and experience evidence", async 
   const experience = evidence[3]?.data as { canvasCount: number; technologies: string[] }; assert.equal(experience.canvasCount, 1); assert.ok(experience.technologies.includes("three.js"));
 });
 
-test("controlled browser inspector emits rendered, network and runtime evidence", async () => {
+test("controlled browser inspector emits rendered, network, runtime and experience evidence", async () => {
   let closed = false;
-  const session: BrowserSession = { async navigate() { return { url: "https://example.com/app", title: "Rendered", h1: "Scene", canvasCount: 2, headings: 3, console: [{ level: "info", text: "ready" }], requests: [{ url: "https://example.com/app.js", method: "GET", resourceType: "script", status: 200 }, { url: "http://127.0.0.1/private", method: "GET" }], runtimeErrors: [] }; }, async close() { closed = true; } };
+  const session: BrowserSession = { async navigate() { return { url: "https://example.com/app", title: "Rendered", h1: "Scene", html: "<canvas></canvas>", canvasCount: 2, headings: 3, console: [{ level: "info", text: "ready" }], requests: [{ url: "https://example.com/scene.glb", method: "GET", resourceType: "fetch", status: 200 }, { url: "http://127.0.0.1/private", method: "GET" }], runtimeErrors: [] }; }, async close() { closed = true; } };
   const inspector = new ControlledBrowserInspector({ createSession: async () => session, resolveImpl: publicResolver });
   const evidence = await inspector.inspect(new URL("https://example.com"));
-  assert.equal(evidence.length, 3); assert.equal(evidence[0]?.source, "browser:document");
+  assert.equal(evidence.length, 4); assert.equal(evidence[0]?.source, "browser:document");
   const network = evidence[1]?.data as { requests: unknown[] }; assert.equal(network.requests.length, 1);
-  assert.equal(evidence[2]?.source, "browser:console"); assert.equal(closed, true);
+  assert.equal(evidence[2]?.source, "browser:console"); assert.equal(evidence[3]?.source, "browser:experience");
+  const experience = evidence[3]?.data as { interactiveRequests: number }; assert.equal(experience.interactiveRequests, 1); assert.equal(closed, true);
 });
 
 test("controlled browser inspector closes sessions after navigation failure", async () => {
