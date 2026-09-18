@@ -71,3 +71,16 @@ test("uses static reference profile when browser profile is unavailable", () => 
   assert.equal(result.accepted, true);
   assert.deepEqual(result.findings, []);
 });
+
+
+test("required experience fidelity blocks delivery and keeps repair actions", () => {
+  const compared: Evidence[] = [
+    ...evidence,
+    { source: "browser:experience", kind: "code", summary: "reference", data: { canvasCount: 1, interactiveRequests: 1, technologies: ["three.js"] } },
+    { source: "preview:experience", kind: "code", summary: "preview", data: { canvasCount: 0, interactiveAssets: 0, technologies: [] } },
+  ];
+  const result = evaluateAcceptance(criteria, runtime, compared, { experienceFidelity: "required" });
+  assert.equal(result.accepted, false);
+  assert.ok(result.findings.some((finding) => finding.code === "experience.canvas.missing" && finding.severity === "error"));
+  assert.ok(result.nextActions.every((action) => action.targetPath === "preview.mjs"));
+});
