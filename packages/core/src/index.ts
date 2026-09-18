@@ -24,7 +24,9 @@ export class MonstroOrchestrator {
       await this.phase(task, "plan", `${initialEvidence.length} evidence item(s)`);
       const plan = await this.services.architect.plan(task, initialEvidence);
       await this.phase(task, "build", `${plan.steps.length} plan step(s)`);
-      await this.services.builder.apply(task, await this.services.builder.build(task, plan));
+      const buildPatches = await this.services.builder.build(task, plan);
+      await this.services.builder.apply(task, buildPatches);
+      await this.journal.record(task, "build.applied", `${buildPatches.length} patch(es)`, { paths: buildPatches.map((patch) => patch.path), requirementIds: [...new Set(buildPatches.flatMap((patch) => patch.requirementIds ?? []))], patches: buildPatches.map((patch) => ({ path: patch.path, operation: patch.operation, requirementIds: patch.requirementIds ?? [] })) });
 
       while (task.iteration < task.maxIterations) {
         task.iteration += 1;
@@ -48,7 +50,7 @@ export class MonstroOrchestrator {
         const repairDetail = evaluation.findings.map((finding) => `${finding.code}: ${finding.message}`).join("; ");
         await this.phase(task, "repair", repairDetail);
         const patches = await this.services.repairer.repair(task, evaluation);
-        await this.journal.record(task, "repair.completed", `${patches.length} patch(es)`, { actions: evaluation.nextActions.map((action) => action.id), paths: patches.map((patch) => patch.path) });
+        await this.journal.record(task, "repair.completed", `${patches.length} patch(es)`, { actions: evaluation.nextActions.map((action) => action.id), paths: patches.map((patch) => patch.path), requirementIds: [...new Set(patches.flatMap((patch) => patch.requirementIds ?? []))], patches: patches.map((patch) => ({ path: patch.path, operation: patch.operation, requirementIds: patch.requirementIds ?? [] })) });
         if (patches.length === 0) break;
         await this.services.builder.apply(task, patches);
       }
