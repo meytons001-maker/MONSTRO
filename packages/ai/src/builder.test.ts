@@ -4,7 +4,7 @@ import type { BuildPlan, MonstroTask } from "@monstro/contracts";
 import { generateAiBuild, ModelRouter, type AiProvider } from "./index.ts";
 
 const task: MonstroTask = { id: "build-1", intent: "build preview", phase: "build", context: { projectId: "build-1", rootDir: ".", summary: "fixture", decisions: [] }, requestedCapabilities: [], acceptance: [], iteration: 1, maxIterations: 2 };
-const plan: BuildPlan = { taskId: task.id, rationale: "fixture", steps: [{ id: "one", title: "Create preview", description: "Create preview.mjs", status: "pending" }] };
+const plan: BuildPlan = { taskId: task.id, rationale: "fixture", requirements: [], steps: [{ id: "one", title: "Create preview", description: "Create preview.mjs", status: "pending" }] };
 
 function router(output: string, capabilities = new Set(["code"] as const)) {
   const provider: AiProvider = { id: "fixture", capabilities, async generate() { return { provider: "fixture", model: "fixture-model", output, durationMs: 1 }; } };
