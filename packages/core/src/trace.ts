@@ -4,6 +4,21 @@ function clonePatch(patch: FilePatch): FilePatch {
   return { ...patch, requirementIds: patch.requirementIds ? [...patch.requirementIds] : undefined };
 }
 
+function cloneEvaluation(evaluation: EvaluationIterationTrace): EvaluationIterationTrace {
+  return {
+    ...evaluation,
+    evidenceTrace: evaluation.evidenceTrace.map((trace) => ({ ...trace, evidenceSources: [...trace.evidenceSources] })),
+    findings: evaluation.findings.map((finding) => ({ ...finding, requirementIds: finding.requirementIds ? [...finding.requirementIds] : undefined })),
+    repairActionIds: [...evaluation.repairActionIds],
+  };
+}
+
+export interface MissionTraceSnapshot {
+  buildPatches: FilePatch[];
+  repairPatches: FilePatch[];
+  evaluations: EvaluationIterationTrace[];
+}
+
 export class MissionTraceCollector {
   private readonly buildPatches: FilePatch[] = [];
   private readonly repairPatches: FilePatch[] = [];
@@ -28,6 +43,14 @@ export class MissionTraceCollector {
     });
   }
 
+  snapshot(): MissionTraceSnapshot {
+    return {
+      buildPatches: this.buildPatches.map(clonePatch),
+      repairPatches: this.repairPatches.map(clonePatch),
+      evaluations: this.evaluations.map(cloneEvaluation),
+    };
+  }
+
   build(plan: BuildPlan, finalEvaluation: Evaluation): DeliveryTrace {
     const requirementIds = new Set([
       ...plan.requirements.map((requirement) => requirement.id),
@@ -50,7 +73,7 @@ export class MissionTraceCollector {
           status: finalFindings.some((finding) => finding.severity === "error") ? "unresolved" as const : "satisfied" as const,
         };
       }),
-      evaluations: this.evaluations.map((evaluation) => ({ ...evaluation, evidenceTrace: evaluation.evidenceTrace.map((trace) => ({ ...trace, evidenceSources: [...trace.evidenceSources] })), findings: evaluation.findings.map((finding) => ({ ...finding, requirementIds: finding.requirementIds ? [...finding.requirementIds] : undefined })), repairActionIds: [...evaluation.repairActionIds] })),
+      evaluations: this.evaluations.map(cloneEvaluation),
     };
   }
 }
