@@ -19,8 +19,7 @@ export class MonstroOrchestrator {
   constructor(private readonly services: MonstroServices, journal = new MissionJournal()) { this.journal = journal; }
   private async phase(task: MonstroTask, phase: TaskPhase, detail?: string): Promise<void> { task.phase = phase; await this.journal.record(task, "phase.changed", detail); }
   private async publishTrace(task: MonstroTask, trace: MissionTraceCollector, detail: string): Promise<void> {
-    const snapshot = trace.snapshot();
-    await this.journal.record(task, "trace.updated", detail, { buildPatches: snapshot.buildPatches, repairPatches: snapshot.repairPatches, evaluations: snapshot.evaluations });
+    await this.journal.record(task, "trace.updated", detail, { progress: trace.progress() });
   }
 
   async execute(task: MonstroTask): Promise<Delivery> {
