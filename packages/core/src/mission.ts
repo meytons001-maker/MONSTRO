@@ -5,6 +5,7 @@ export type MissionEventType =
   | "iteration.started"
   | "observation.completed"
   | "build.applied"
+  | "trace.updated"
   | "repair.completed"
   | "mission.completed"
   | "mission.failed";
