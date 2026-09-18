@@ -1,6 +1,6 @@
 "use client";
 
-import type { MissionTransportEvent } from "@monstro/contracts";
+import { MissionNdjsonParser, type MissionTransportEvent } from "@monstro/contracts";
 import { FormEvent, useState } from "react";
 
 const pipeline = ["understand", "inspect", "plan", "build", "run", "observe", "evaluate", "repair", "deliver"];
@@ -24,8 +24,13 @@ export function MissionConsole() {
     try {
       const response = await fetch("/api/missions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ intent }) });
       if (!response.ok || !response.body) throw new Error("Mission transport unavailable");
-      const reader = response.body.getReader(); const decoder = new TextDecoder(); let buffer = "";
-      while (true) { const { value, done } = await reader.read(); buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done }); const lines = buffer.split("\n"); buffer = lines.pop() ?? ""; for (const line of lines) if (line.trim()) setEvents((current) => [...current, JSON.parse(line) as MissionTransportEvent]); if (done) break; }
+      const reader = response.body.getReader(); const decoder = new TextDecoder(); const parser = new MissionNdjsonParser();
+      while (true) {
+        const { value, done } = await reader.read();
+        const parsed = parser.push(decoder.decode(value ?? new Uint8Array(), { stream: !done }));
+        if (parsed.length) setEvents((current) => [...current, ...parsed]);
+        if (done) { const tail = parser.finish(); if (tail.length) setEvents((current) => [...current, ...tail]); break; }
+      }
     } catch (error) { setEvents((current) => [...current, { id: "client:error", taskId: "client", type: "mission.failed", phase: "failed", timestamp: new Date().toISOString(), detail: error instanceof Error ? error.message : "Unknown error" }]); }
     finally { setRunning(false); }
   }
