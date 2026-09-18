@@ -4,10 +4,10 @@ import type { BuildPlan, MonstroTask } from "@monstro/contracts";
 import { generateAiBuild, ModelRouter, type AiProvider } from "./index.ts";
 
 const task: MonstroTask = { id: "build-1", intent: "build preview", phase: "build", context: { projectId: "build-1", rootDir: ".", summary: "fixture", decisions: [] }, requestedCapabilities: [], acceptance: [], iteration: 1, maxIterations: 2 };
-const plan: BuildPlan = { taskId: task.id, rationale: "fixture", requirements: [], steps: [{ id: "one", title: "Create preview", description: "Create preview.mjs", status: "pending" }] };
+const plan: BuildPlan = { taskId: task.id, rationale: "fixture", requirements: [{ id: "artifact:web-preview", description: "Produce a web preview", source: "understanding", required: true }], steps: [{ id: "one", title: "Create preview", description: "Create preview.mjs", status: "pending" }] };
 
-function router(output: string, capabilities = new Set(["code"] as const)) {
-  const provider: AiProvider = { id: "fixture", capabilities, async generate() { return { provider: "fixture", model: "fixture-model", output, durationMs: 1 }; } };
+function router(output: string, capabilities = new Set(["code"] as const), inspect?: (request: Parameters<AiProvider["generate"]>[0]) => void) {
+  const provider: AiProvider = { id: "fixture", capabilities, async generate(request) { inspect?.(request); return { provider: "fixture", model: "fixture-model", output, durationMs: 1 }; } };
   return new ModelRouter().register(provider);
 }
 
@@ -19,6 +19,13 @@ test("AI Builder normalizes validated patches", async () => {
   const result = await generateAiBuild(router('{"patches":[{"path":"src/app.mjs","operation":"create","content":"console.log(1)"}]}'), task, plan);
   assert.deepEqual(result?.patches, [{ path: "src/app.mjs", operation: "create", content: "console.log(1)" }]);
   assert.equal(result?.provider, "fixture");
+});
+
+test("AI Builder receives structured build requirements", async () => {
+  let prompt = "";
+  await generateAiBuild(router('{"patches":[{"path":"preview.mjs","operation":"create","content":"export {}"}]}', new Set(["code"] as const), (request) => { prompt = request.prompt; }), task, plan);
+  const payload = JSON.parse(prompt) as { plan: { requirements: BuildPlan["requirements"] } };
+  assert.deepEqual(payload.plan.requirements, plan.requirements);
 });
 
 test("AI Builder rejects workspace traversal", async () => {
