@@ -25,14 +25,16 @@ function stringArray(data: Record<string, unknown> | undefined, field: string): 
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
 
-function compareExperience(evidence: Evidence[], required = false): { findings: EvaluationFinding[]; nextActions: RepairAction[] } {
+function compareExperience(evidence: Evidence[], required = false): { findings: EvaluationFinding[]; nextActions: RepairAction[]; checks: number; passed: number } {
   const target = evidence.find((item) => item.source === "browser:experience") ?? evidence.find((item) => item.source === "reference:experience");
-  if (!target) return { findings: [], nextActions: [] };
+  if (!target) return { findings: [], nextActions: [], checks: 0, passed: 0 };
   const produced = evidence.find((item) => item.source === "preview:experience");
   const targetData = record(target.data);
   const producedData = record(produced?.data);
   const findings: EvaluationFinding[] = [];
   const nextActions: RepairAction[] = [];
+  let checks = 1;
+  let passed = produced ? 1 : 0;
 
   const add = (code: FindingCode, message: string) => {
     findings.push({ code, message, severity: required ? "error" : "warning", evidenceSource: produced?.source ?? "preview:experience" });
@@ -41,22 +43,23 @@ function compareExperience(evidence: Evidence[], required = false): { findings: 
 
   if (!produced) {
     add("experience.profile.missing", "Produced preview has no experience profile to compare with the inspected reference");
-    return { findings, nextActions };
+    return { findings, nextActions, checks, passed };
   }
 
   const targetCanvas = numberField(targetData, "canvasCount");
   const producedCanvas = numberField(producedData, "canvasCount");
-  if (targetCanvas > 0 && producedCanvas < targetCanvas) add("experience.canvas.missing", `Reference renders ${targetCanvas} canvas element(s), preview exposes ${producedCanvas}`);
+  if (targetCanvas > 0) { checks += 1; if (producedCanvas < targetCanvas) add("experience.canvas.missing", `Reference renders ${targetCanvas} canvas element(s), preview exposes ${producedCanvas}`); else passed += 1; }
 
   const targetAssets = Math.max(numberField(targetData, "interactiveRequests"), numberField(targetData, "interactiveAssets"));
   const producedAssets = numberField(producedData, "interactiveAssets");
-  if (targetAssets > 0 && producedAssets === 0) add("experience.assets.missing", `Reference exposes ${targetAssets} interactive/3D asset signal(s), preview exposes none`);
+  if (targetAssets > 0) { checks += 1; if (producedAssets === 0) add("experience.assets.missing", `Reference exposes ${targetAssets} interactive/3D asset signal(s), preview exposes none`); else passed += 1; }
 
   const producedTechnologies = new Set(stringArray(producedData, "technologies"));
   const missingTechnologies = stringArray(targetData, "technologies").filter((technology) => !producedTechnologies.has(technology));
-  if (missingTechnologies.length > 0) add("experience.technology.missing", `Preview does not expose reference technology signal(s): ${missingTechnologies.join(", ")}`);
+  const targetTechnologies = stringArray(targetData, "technologies");
+  if (targetTechnologies.length > 0) { checks += 1; if (missingTechnologies.length > 0) add("experience.technology.missing", `Preview does not expose reference technology signal(s): ${missingTechnologies.join(", ")}`); else passed += 1; }
 
-  return { findings, nextActions };
+  return { findings, nextActions, checks, passed };
 }
 
 export interface EvaluationPolicy { experienceFidelity?: "advisory" | "required"; }
@@ -80,6 +83,8 @@ export function evaluateAcceptance(criteria: AcceptanceCriterion[], runtime: Run
   const comparison = compareExperience(evidence, policy.experienceFidelity === "required");
   findings.push(...comparison.findings);
   nextActions.push(...comparison.nextActions);
+  checks += comparison.checks;
+  passed += comparison.passed;
   const blocking = findings.some((finding) => finding.severity === "error");
   return { accepted: !blocking, score: checks === 0 ? 1 : passed / checks, findings, nextActions };
 }
