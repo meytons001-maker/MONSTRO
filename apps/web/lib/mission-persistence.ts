@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { FileMissionJournalStore, MissionJournal, replayMissionTraceProgress } from "@monstro/core";
+import { FileMissionJournalStore, MissionJournal, planMissionResume, replayMissionTraceProgress } from "@monstro/core";
 
 const DEFAULT_DIRECTORY = join(process.cwd(), ".monstro", "missions");
 
@@ -13,10 +13,17 @@ export async function loadPersistedMission(taskId: string) {
   const store = createMissionJournalStore();
   const journal = await MissionJournal.replay(taskId, store);
   const events = journal.snapshot();
+  const resume = planMissionResume(events);
   return {
     taskId,
     events,
     progress: replayMissionTraceProgress(events),
+    resume: {
+      resumable: resume.resumable,
+      restartPhase: resume.restartPhase ?? null,
+      reason: resume.reason,
+      task: resume.task ?? null,
+    },
     lastEvent: events.at(-1) ?? null,
   };
 }
@@ -34,6 +41,9 @@ export async function listPersistedMissions() {
       updatedAt: mission.lastEvent?.timestamp ?? firstEvent?.timestamp ?? null,
       eventCount: mission.events.length,
       progress: mission.progress,
+      resumable: mission.resume.resumable,
+      restartPhase: mission.resume.restartPhase,
+      resumeReason: mission.resume.reason,
     };
   }));
 
