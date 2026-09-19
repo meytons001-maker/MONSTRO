@@ -29,7 +29,7 @@ export class MonstroOrchestrator {
     await this.journal.record(task, "phase.changed", detail, { task: structuredClone(task) });
   }
   private async publishTrace(task: MonstroTask, trace: MissionTraceCollector, detail: string): Promise<void> {
-    await this.journal.record(task, "trace.updated", detail, { progress: trace.progress() });
+    await this.journal.record(task, "trace.updated", detail, { progress: trace.progress(), snapshot: trace.snapshot() });
   }
 
   async execute(task: MonstroTask): Promise<Delivery> {
