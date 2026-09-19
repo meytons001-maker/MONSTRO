@@ -3,6 +3,7 @@ import { MissionJournal } from "./mission.ts";
 import { MissionTraceCollector } from "./trace.ts";
 export * from "./mission.ts";
 export * from "./mission-store.ts";
+export * from "./file-mission-store.ts";
 export * from "./trace.ts";
 
 export interface Inspector { inspect(task: MonstroTask): Promise<Evidence[]>; }
