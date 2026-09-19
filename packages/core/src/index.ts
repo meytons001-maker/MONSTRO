@@ -5,6 +5,7 @@ export * from "./mission.ts";
 export * from "./mission-store.ts";
 export * from "./file-mission-store.ts";
 export * from "./trace.ts";
+export * from "./task-replay.ts";
 
 export interface Inspector { inspect(task: MonstroTask): Promise<Evidence[]>; }
 export interface Architect { plan(task: MonstroTask, evidence: Evidence[]): Promise<BuildPlan>; }
@@ -23,7 +24,10 @@ function requirementIds(patches: FilePatch[]): string[] {
 export class MonstroOrchestrator {
   readonly journal: MissionJournal;
   constructor(private readonly services: MonstroServices, journal = new MissionJournal()) { this.journal = journal; }
-  private async phase(task: MonstroTask, phase: TaskPhase, detail?: string): Promise<void> { task.phase = phase; await this.journal.record(task, "phase.changed", detail); }
+  private async phase(task: MonstroTask, phase: TaskPhase, detail?: string): Promise<void> {
+    task.phase = phase;
+    await this.journal.record(task, "phase.changed", detail, { task: structuredClone(task) });
+  }
   private async publishTrace(task: MonstroTask, trace: MissionTraceCollector, detail: string): Promise<void> {
     await this.journal.record(task, "trace.updated", detail, { progress: trace.progress() });
   }
