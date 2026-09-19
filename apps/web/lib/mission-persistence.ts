@@ -20,3 +20,22 @@ export async function loadPersistedMission(taskId: string) {
     lastEvent: events.at(-1) ?? null,
   };
 }
+
+export async function listPersistedMissions() {
+  const store = createMissionJournalStore();
+  const taskIds = await store.listTaskIds();
+  const missions = await Promise.all(taskIds.map(async (taskId) => {
+    const mission = await loadPersistedMission(taskId);
+    const firstEvent = mission.events[0] ?? null;
+    return {
+      taskId,
+      phase: mission.lastEvent?.phase ?? firstEvent?.phase ?? null,
+      status: mission.lastEvent?.type ?? null,
+      updatedAt: mission.lastEvent?.timestamp ?? firstEvent?.timestamp ?? null,
+      eventCount: mission.events.length,
+      progress: mission.progress,
+    };
+  }));
+
+  return missions.sort((left, right) => (right.updatedAt ?? "").localeCompare(left.updatedAt ?? ""));
+}
