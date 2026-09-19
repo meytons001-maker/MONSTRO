@@ -1,4 +1,4 @@
-import { mkdir, open, readFile } from "node:fs/promises";
+import { mkdir, open, readFile, readdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { MissionEvent } from "./mission.js";
 import type { MissionJournalStore } from "./mission-store.js";
@@ -50,6 +50,27 @@ export class FileMissionJournalStore implements MissionJournalStore {
     } finally {
       if (this.appendQueues.get(event.taskId) === next) this.appendQueues.delete(event.taskId);
     }
+  }
+
+  async listTaskIds(): Promise<readonly string[]> {
+    let entries;
+    try {
+      entries = await readdir(this.directory, { withFileTypes: true });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+      throw error;
+    }
+
+    return entries
+      .filter((entry) => entry.isFile() && entry.name.endsWith(".ndjson"))
+      .flatMap((entry) => {
+        try {
+          return [decodeURIComponent(entry.name.slice(0, -".ndjson".length))];
+        } catch {
+          return [];
+        }
+      })
+      .sort();
   }
 
   async load(taskId: string): Promise<readonly MissionEvent[]> {
