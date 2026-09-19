@@ -1,4 +1,5 @@
 import type { MonstroTask, TaskPhase } from "@monstro/contracts";
+import type { MissionJournalStore } from "./mission-store.js";
 
 export type MissionEventType =
   | "phase.changed"
@@ -22,9 +23,22 @@ export interface MissionEvent {
 
 export type MissionListener = (event: MissionEvent) => void | Promise<void>;
 
+function cloneEvent(event: MissionEvent): MissionEvent {
+  return { ...event, data: event.data ? structuredClone(event.data) : undefined };
+}
+
 export class MissionJournal {
   private readonly events: MissionEvent[] = [];
   private readonly listeners = new Set<MissionListener>();
+
+  constructor(private readonly store?: MissionJournalStore) {}
+
+  static async replay(taskId: string, store: MissionJournalStore): Promise<MissionJournal> {
+    const journal = new MissionJournal(store);
+    const persisted = await store.load(taskId);
+    journal.events.push(...persisted.map(cloneEvent));
+    return journal;
+  }
 
   subscribe(listener: MissionListener): () => void {
     this.listeners.add(listener);
@@ -32,7 +46,7 @@ export class MissionJournal {
   }
 
   snapshot(): readonly MissionEvent[] {
-    return [...this.events];
+    return this.events.map(cloneEvent);
   }
 
   async record(task: MonstroTask, type: MissionEventType, detail?: string, data?: Record<string, unknown>): Promise<MissionEvent> {
@@ -43,10 +57,11 @@ export class MissionJournal {
       type,
       timestamp: new Date().toISOString(),
       detail,
-      data,
+      data: data ? structuredClone(data) : undefined,
     };
-    this.events.push(event);
-    await Promise.all([...this.listeners].map((listener) => listener(event)));
-    return event;
+    await this.store?.append(event);
+    this.events.push(cloneEvent(event));
+    await Promise.all([...this.listeners].map((listener) => listener(cloneEvent(event))));
+    return cloneEvent(event);
   }
 }
