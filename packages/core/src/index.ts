@@ -2,6 +2,7 @@ import type { BuildPlan, Delivery, Evaluation, Evidence, FilePatch, MonstroTask,
 import { MissionJournal } from "./mission.ts";
 import { MissionTraceCollector } from "./trace.ts";
 export * from "./mission.ts";
+export * from "./mission-store.ts";
 export * from "./trace.ts";
 
 export interface Inspector { inspect(task: MonstroTask): Promise<Evidence[]>; }
@@ -29,48 +30,50 @@ export class MonstroOrchestrator {
       const initialEvidence = await this.services.inspector.inspect(task);
       await this.phase(task, "plan", `${initialEvidence.length} evidence item(s)`);
       const plan = await this.services.architect.plan(task, initialEvidence);
-      await this.phase(task, "build", `${plan.steps.length} plan step(s)`);
-      const buildPatches = await this.services.builder.build(task, plan);
-      await this.services.builder.apply(task, buildPatches);
-      trace.recordBuild(buildPatches);
-      await this.journal.record(task, "build.applied", `${buildPatches.length} patch(es)`, { paths: buildPatches.map((patch) => patch.path), requirementIds: [...new Set(buildPatches.flatMap((patch) => patch.requirementIds ?? []))], patches: buildPatches.map((patch) => ({ path: patch.path, operation: patch.operation, requirementIds: patch.requirementIds ?? [] })) });
-      await this.publishTrace(task, trace, "build recorded");
+      await this.phase(task, "build", `${plan.steps.length} planned step(s)`);
+      const patches = await this.services.builder.build(task, plan);
+      await this.services.builder.apply(task, patches);
+      trace.recordBuild(patches);
+      await this.journal.record(task, "build.applied", `${patches.length} patch(es) applied`);
+      await this.publishTrace(task, trace, "initial build traced");
 
+      let finalRuntime: RuntimeResult | undefined;
+      let finalEvaluation: Evaluation | undefined;
       while (task.iteration < task.maxIterations) {
         task.iteration += 1;
         await this.journal.record(task, "iteration.started", `iteration ${task.iteration}`);
         await this.phase(task, "run");
         const runtime = await this.services.runtime.run(task);
-        await this.phase(task, "observe", runtime.previewUrl ? "inspecting preview" : "inspecting runtime result");
+        await this.phase(task, "observe");
         const observation = await this.services.observer.observe(task, runtime);
-        await this.journal.record(task, "observation.completed", `${observation.evidence.length} evidence item(s)`, { ok: observation.ok, durationMs: observation.durationMs });
-        await this.phase(task, "evaluate", observation.ok ? "observation ok" : "observation failed");
-        const evaluation = await this.services.evaluator.evaluate(task, runtime, [...initialEvidence, ...observation.evidence]);
+        await this.journal.record(task, "observation.completed", observation.summary);
+        await this.phase(task, "evaluate");
+        const evidence = await this.services.inspector.inspect(task);
+        const evaluation = await this.services.evaluator.evaluate(task, runtime, evidence);
         trace.recordEvaluation(task.iteration, evaluation);
-        await this.publishTrace(task, trace, `evaluation ${task.iteration} recorded`);
-
-        if (runtime.ok && observation.ok && evaluation.accepted) {
-          await this.phase(task, "deliver", `score ${evaluation.score}`);
-          const delivery = await this.services.exporter.deliver(task, runtime, evaluation);
-          delivery.trace = trace.build(plan, evaluation);
-          await this.journal.record(task, "mission.completed", delivery.summary, { previewUrl: delivery.previewUrl, artifacts: delivery.artifacts, completedAt: delivery.completedAt });
-          return delivery;
-        }
-
-        const repairDetail = evaluation.findings.map((finding) => `${finding.code}: ${finding.message}`).join("; ");
-        await this.phase(task, "repair", repairDetail);
-        const patches = await this.services.repairer.repair(task, evaluation);
-        await this.journal.record(task, "repair.completed", `${patches.length} patch(es)`, { actions: evaluation.nextActions.map((action) => action.id), paths: patches.map((patch) => patch.path), requirementIds: [...new Set(patches.flatMap((patch) => patch.requirementIds ?? []))], patches: patches.map((patch) => ({ path: patch.path, operation: patch.operation, requirementIds: patch.requirementIds ?? [] })) });
-        if (patches.length === 0) break;
-        await this.services.builder.apply(task, patches);
-        trace.recordRepair(patches);
-        await this.publishTrace(task, trace, `repair ${task.iteration} recorded`);
+        await this.publishTrace(task, trace, `evaluation ${task.iteration} traced`);
+        finalRuntime = runtime;
+        finalEvaluation = evaluation;
+        if (evaluation.accepted) break;
+        if (task.iteration >= task.maxIterations) break;
+        await this.phase(task, "repair", `${evaluation.findings.length} finding(s)`);
+        const repairPatches = await this.services.repairer.repair(task, evaluation);
+        await this.services.builder.apply(task, repairPatches);
+        trace.recordRepair(repairPatches);
+        await this.journal.record(task, "repair.completed", `${repairPatches.length} repair patch(es) applied`);
+        await this.publishTrace(task, trace, `repair ${task.iteration} traced`);
       }
-      throw new Error(`MONSTRO could not satisfy task ${task.id} after ${task.iteration} iterations`);
+
+      if (!finalRuntime || !finalEvaluation) throw new Error("Mission produced no runtime evaluation");
+      if (!finalEvaluation.accepted) throw new Error(`Mission failed acceptance after ${task.iteration} iteration(s)`);
+      await this.phase(task, "deliver");
+      const delivery = await this.services.exporter.deliver(task, finalRuntime, finalEvaluation);
+      delivery.trace = trace.build(plan, finalEvaluation);
+      await this.journal.record(task, "mission.completed", delivery.summary, { delivery, trace: delivery.trace });
+      return delivery;
     } catch (error) {
-      task.phase = "failed";
-      const message = error instanceof Error ? error.message : String(error);
-      await this.journal.record(task, "mission.failed", message);
+      const detail = error instanceof Error ? error.message : String(error);
+      await this.journal.record(task, "mission.failed", detail);
       throw error;
     }
   }
