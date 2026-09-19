@@ -15,6 +15,10 @@ export interface Repairer { repair(task: MonstroTask, evaluation: Evaluation): P
 export interface Exporter { deliver(task: MonstroTask, runtime: RuntimeResult, evaluation: Evaluation): Promise<Delivery>; }
 export interface MonstroServices { inspector: Inspector; architect: Architect; builder: Builder; runtime: Runtime; observer: Observer; evaluator: Evaluator; repairer: Repairer; exporter: Exporter; }
 
+function requirementIds(patches: FilePatch[]): string[] {
+  return [...new Set(patches.flatMap((patch) => patch.requirementIds ?? []))];
+}
+
 export class MonstroOrchestrator {
   readonly journal: MissionJournal;
   constructor(private readonly services: MonstroServices, journal = new MissionJournal()) { this.journal = journal; }
@@ -34,7 +38,7 @@ export class MonstroOrchestrator {
       const patches = await this.services.builder.build(task, plan);
       await this.services.builder.apply(task, patches);
       trace.recordBuild(patches);
-      await this.journal.record(task, "build.applied", `${patches.length} patch(es) applied`);
+      await this.journal.record(task, "build.applied", `${patches.length} patch(es) applied`, { requirementIds: requirementIds(patches) });
       await this.publishTrace(task, trace, "initial build traced");
 
       let finalRuntime: RuntimeResult | undefined;
@@ -55,7 +59,8 @@ export class MonstroOrchestrator {
           durationMs: observation.durationMs,
         });
         await this.phase(task, "evaluate");
-        const evidence = await this.services.inspector.inspect(task);
+        const inspectedEvidence = await this.services.inspector.inspect(task);
+        const evidence = [...inspectedEvidence, ...observation.evidence];
         const evaluation = await this.services.evaluator.evaluate(task, runtime, evidence);
         trace.recordEvaluation(task.iteration, evaluation);
         await this.publishTrace(task, trace, `evaluation ${task.iteration} traced`);
@@ -67,7 +72,7 @@ export class MonstroOrchestrator {
         const repairPatches = await this.services.repairer.repair(task, evaluation);
         await this.services.builder.apply(task, repairPatches);
         trace.recordRepair(repairPatches);
-        await this.journal.record(task, "repair.completed", `${repairPatches.length} repair patch(es) applied`);
+        await this.journal.record(task, "repair.completed", `${repairPatches.length} repair patch(es) applied`, { requirementIds: requirementIds(repairPatches) });
         await this.publishTrace(task, trace, `repair ${task.iteration} traced`);
       }
 
