@@ -46,7 +46,14 @@ export class MonstroOrchestrator {
         const runtime = await this.services.runtime.run(task);
         await this.phase(task, "observe");
         const observation = await this.services.observer.observe(task, runtime);
-        await this.journal.record(task, "observation.completed", observation.summary);
+        const observationDetail = observation.ok
+          ? `${observation.evidence.length} evidence item(s) observed in ${observation.durationMs}ms`
+          : observation.evidence.find((item) => item.summary)?.summary ?? "Observation failed";
+        await this.journal.record(task, "observation.completed", observationDetail, {
+          ok: observation.ok,
+          evidenceCount: observation.evidence.length,
+          durationMs: observation.durationMs,
+        });
         await this.phase(task, "evaluate");
         const evidence = await this.services.inspector.inspect(task);
         const evaluation = await this.services.evaluator.evaluate(task, runtime, evidence);
