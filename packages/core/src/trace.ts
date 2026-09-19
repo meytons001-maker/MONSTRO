@@ -1,4 +1,5 @@
 import type { BuildPlan, DeliveryTrace, Evaluation, EvaluationIterationTrace, FilePatch, MissionTraceProgress } from "@monstro/contracts";
+import type { MissionEvent } from "./mission.js";
 
 function clonePatch(patch: FilePatch): FilePatch {
   return { ...patch, requirementIds: patch.requirementIds ? [...patch.requirementIds] : undefined };
@@ -11,6 +12,58 @@ function cloneEvaluation(evaluation: EvaluationIterationTrace): EvaluationIterat
     findings: evaluation.findings.map((finding) => ({ ...finding, requirementIds: finding.requirementIds ? [...finding.requirementIds] : undefined })),
     repairActionIds: [...evaluation.repairActionIds],
   };
+}
+
+function emptyProgress(): MissionTraceProgress {
+  return { build: [], repairs: [], evaluations: [] };
+}
+
+function cloneProgress(progress: MissionTraceProgress): MissionTraceProgress {
+  return {
+    build: progress.build.map((patch) => ({ ...patch, requirementIds: [...patch.requirementIds] })),
+    repairs: progress.repairs.map((patch) => ({ ...patch, requirementIds: [...patch.requirementIds] })),
+    evaluations: progress.evaluations.map((evaluation) => ({
+      ...evaluation,
+      requirementIds: [...evaluation.requirementIds],
+      findingCodes: [...evaluation.findingCodes],
+      repairActionIds: [...evaluation.repairActionIds],
+    })),
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isStrings(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
+function isProgress(value: unknown): value is MissionTraceProgress {
+  if (!isRecord(value) || !Array.isArray(value.build) || !Array.isArray(value.repairs) || !Array.isArray(value.evaluations)) return false;
+  const patch = (item: unknown) => isRecord(item)
+    && typeof item.path === "string"
+    && (item.operation === "create" || item.operation === "update" || item.operation === "delete")
+    && isStrings(item.requirementIds);
+  const evaluation = (item: unknown) => isRecord(item)
+    && Number.isInteger(item.iteration)
+    && typeof item.accepted === "boolean"
+    && typeof item.score === "number"
+    && isStrings(item.requirementIds)
+    && isStrings(item.findingCodes)
+    && isStrings(item.repairActionIds);
+  return value.build.every(patch) && value.repairs.every(patch) && value.evaluations.every(evaluation);
+}
+
+export function replayMissionTraceProgress(events: readonly MissionEvent[]): MissionTraceProgress {
+  let latest = emptyProgress();
+  for (const event of events) {
+    if (event.type !== "trace.updated") continue;
+    const progress = event.data?.progress;
+    if (!isProgress(progress)) throw new Error(`Invalid trace progress in mission event ${event.id}`);
+    latest = cloneProgress(progress);
+  }
+  return latest;
 }
 
 export interface MissionTraceSnapshot {
