@@ -1,13 +1,19 @@
 import { createMission } from "../../../lib/mission-runtime";
-import { createMissionJournalStore, loadPersistedMission } from "../../../lib/mission-persistence";
+import { createMissionJournalStore, listPersistedMissions, loadPersistedMission } from "../../../lib/mission-persistence";
 
 export const runtime = "nodejs";
 
 export async function GET(request: Request) {
   const taskId = new URL(request.url).searchParams.get("taskId")?.trim();
-  if (!taskId) return Response.json({ error: "Mission taskId is required." }, { status: 400 });
 
   try {
+    if (!taskId) {
+      return Response.json(
+        { missions: await listPersistedMissions() },
+        { headers: { "Cache-Control": "no-store" } },
+      );
+    }
+
     const mission = await loadPersistedMission(taskId);
     if (mission.events.length === 0) return Response.json({ error: "Mission not found." }, { status: 404 });
     return Response.json(mission, { headers: { "Cache-Control": "no-store" } });
