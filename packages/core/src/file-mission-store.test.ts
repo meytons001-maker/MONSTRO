@@ -34,7 +34,7 @@ test("FileMissionJournalStore persists NDJSON and replays after a new store inst
     const secondStore = new FileMissionJournalStore({ directory });
     const replayed = await MissionJournal.replay(mission.id, secondStore);
     assert.deepEqual(replayed.snapshot().map((event) => event.id), ["mission/file 1:1", "mission/file 1:2"]);
-    assert.equal(replayed.snapshot()[0]?.data?.requirementIds?.[0], "r1");
+    assert.deepEqual(replayed.snapshot()[0]?.data?.requirementIds, ["r1"]);
 
     mission.phase = "build";
     await replayed.record(mission, "build.applied", "continued after restart");
@@ -57,6 +57,7 @@ test("FileMissionJournalStore serializes concurrent appends per mission", async 
     const loaded = await store.load(mission.id);
     assert.equal(loaded.length, 8);
     assert.equal(new Set(loaded.map((event) => event.id)).size, 8);
+    assert.deepEqual(loaded.map((event) => event.id), Array.from({ length: 8 }, (_, index) => `parallel:${index + 1}`));
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
