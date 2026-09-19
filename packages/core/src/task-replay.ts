@@ -1,7 +1,11 @@
-import type { MonstroTask, TaskPhase } from "@monstro/contracts";
+import type { BuildPlan, MonstroTask, TaskPhase } from "@monstro/contracts";
 import type { MissionEvent } from "./mission.js";
 
 const phases = new Set<TaskPhase>(["understand", "inspect", "plan", "build", "run", "observe", "evaluate", "repair", "deliver"]);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
 function isTask(value: unknown): value is MonstroTask {
   if (!value || typeof value !== "object") return false;
@@ -18,6 +22,21 @@ function isTask(value: unknown): value is MonstroTask {
     && Number.isInteger(task.maxIterations);
 }
 
+function isBuildPlan(value: unknown): value is BuildPlan {
+  if (!isRecord(value) || typeof value.taskId !== "string" || typeof value.rationale !== "string" || !Array.isArray(value.requirements) || !Array.isArray(value.steps)) return false;
+  const requirement = (item: unknown) => isRecord(item)
+    && typeof item.id === "string"
+    && typeof item.description === "string"
+    && (item.source === "understanding" || item.source === "acceptance")
+    && typeof item.required === "boolean";
+  const step = (item: unknown) => isRecord(item)
+    && typeof item.id === "string"
+    && typeof item.title === "string"
+    && typeof item.description === "string"
+    && ["pending", "running", "done", "failed"].includes(String(item.status));
+  return value.requirements.every(requirement) && value.steps.every(step);
+}
+
 /** Reconstructs the latest durable task checkpoint emitted by the orchestrator. */
 export function replayMissionTask(events: readonly MissionEvent[]): MonstroTask | undefined {
   let checkpoint: MonstroTask | undefined;
@@ -29,6 +48,20 @@ export function replayMissionTask(events: readonly MissionEvent[]): MonstroTask 
     checkpoint = structuredClone(candidate);
   }
   return checkpoint ? structuredClone(checkpoint) : undefined;
+}
+
+/** Reconstructs the latest durable build plan required to deliver a resumed mission. */
+export function replayMissionBuildPlan(events: readonly MissionEvent[]): BuildPlan | undefined {
+  let plan: BuildPlan | undefined;
+  for (const event of events) {
+    if (event.type !== "build.applied") continue;
+    const candidate = event.data?.plan;
+    if (candidate === undefined) continue;
+    if (!isBuildPlan(candidate)) throw new Error(`Invalid build plan in mission event ${event.id}`);
+    if (candidate.taskId !== event.taskId) throw new Error(`Build plan ${event.id} belongs to a different mission`);
+    plan = structuredClone(candidate);
+  }
+  return plan ? structuredClone(plan) : undefined;
 }
 
 export interface MissionResumeDecision {

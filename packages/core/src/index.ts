@@ -43,7 +43,7 @@ export class MonstroOrchestrator {
       const patches = await this.services.builder.build(task, plan);
       await this.services.builder.apply(task, patches);
       trace.recordBuild(patches);
-      await this.journal.record(task, "build.applied", `${patches.length} patch(es) applied`, { requirementIds: requirementIds(patches) });
+      await this.journal.record(task, "build.applied", `${patches.length} patch(es) applied`, { requirementIds: requirementIds(patches), plan: structuredClone(plan) });
       await this.publishTrace(task, trace, "initial build traced");
 
       let finalRuntime: RuntimeResult | undefined;

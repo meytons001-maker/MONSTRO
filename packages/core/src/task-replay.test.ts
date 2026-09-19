@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { MonstroTask, TaskPhase } from "@monstro/contracts";
+import type { BuildPlan, MonstroTask, TaskPhase } from "@monstro/contracts";
 import { MissionJournal, type MissionEvent } from "./mission.js";
-import { planMissionResume, replayMissionTask } from "./task-replay.js";
+import { planMissionResume, replayMissionBuildPlan, replayMissionTask } from "./task-replay.js";
 
 function task(): MonstroTask {
   return { id: "resume-1", intent: "resume me", phase: "understand", context: { projectId: "resume-1", rootDir: ".", summary: "fixture", decisions: [] }, requestedCapabilities: [], acceptance: [], iteration: 0, maxIterations: 2 };
@@ -16,6 +16,10 @@ function checkpoint(phase: TaskPhase, id = 1): MissionEvent {
 
 function event(type: MissionEvent["type"], phase: TaskPhase, id: number): MissionEvent {
   return { id: `resume-1:${id}`, taskId: "resume-1", phase, type, timestamp: new Date().toISOString() };
+}
+
+function plan(): BuildPlan {
+  return { taskId: "resume-1", rationale: "durable resume fixture", requirements: [{ id: "req", description: "required output", source: "acceptance", required: true }], steps: [{ id: "build", title: "Build", description: "apply output", status: "pending" }] };
 }
 
 test("replays the latest task checkpoint without exposing journal state to mutation", async () => {
@@ -34,14 +38,29 @@ test("replays the latest task checkpoint without exposing journal state to mutat
   assert.equal(replayMissionTask(journal.snapshot())?.context.summary, "fixture");
 });
 
+test("replays the durable build plan needed by a resumed delivery", () => {
+  const durablePlan = plan();
+  const events: MissionEvent[] = [{ ...event("build.applied", "build", 2), data: { plan: durablePlan } }];
+  const restored = replayMissionBuildPlan(events);
+  assert.deepEqual(restored, durablePlan);
+  restored!.steps[0]!.title = "mutated";
+  assert.equal(replayMissionBuildPlan(events)?.steps[0]?.title, "Build");
+});
+
+test("build-plan replay rejects malformed and cross-mission payloads", () => {
+  assert.throws(() => replayMissionBuildPlan([{ ...event("build.applied", "build", 2), data: { plan: { nope: true } } }]), /Invalid build plan/);
+  assert.throws(() => replayMissionBuildPlan([{ ...event("build.applied", "build", 2), data: { plan: { ...plan(), taskId: "other" } } }]), /different mission/);
+});
+
 test("returns undefined for journals created before task checkpoints", () => {
   assert.equal(replayMissionTask([]), undefined);
+  assert.equal(replayMissionBuildPlan([]), undefined);
 });
 
 test("rejects malformed or cross-mission checkpoints", () => {
   const base = { id: "resume-1:1", taskId: "resume-1", phase: "run" as const, type: "phase.changed" as const, timestamp: new Date().toISOString() };
   assert.throws(() => replayMissionTask([{ ...base, data: { task: { nope: true } } }]), /Invalid task checkpoint/);
-  assert.throws(() => replayMissionTask([{ ...base, data: { task: { ...task(), id: "other" } } }]), /different mission/);
+  assert.throws(() => replayMissionTask([{ ...base, data: { task: { ...task(), id: "other" } }]), /different mission/);
 });
 
 test("resume policy refuses completed or legacy missions", () => {
