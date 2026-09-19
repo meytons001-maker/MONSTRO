@@ -30,6 +30,7 @@ function cloneEvent(event: MissionEvent): MissionEvent {
 export class MissionJournal {
   private readonly events: MissionEvent[] = [];
   private readonly listeners = new Set<MissionListener>();
+  private nextSequence = 1;
 
   constructor(private readonly store?: MissionJournalStore) {}
 
@@ -37,6 +38,7 @@ export class MissionJournal {
     const journal = new MissionJournal(store);
     const persisted = await store.load(taskId);
     journal.events.push(...persisted.map(cloneEvent));
+    journal.nextSequence = persisted.length + 1;
     return journal;
   }
 
@@ -50,8 +52,9 @@ export class MissionJournal {
   }
 
   async record(task: MonstroTask, type: MissionEventType, detail?: string, data?: Record<string, unknown>): Promise<MissionEvent> {
+    const sequence = this.nextSequence++;
     const event: MissionEvent = {
-      id: `${task.id}:${this.events.length + 1}`,
+      id: `${task.id}:${sequence}`,
       taskId: task.id,
       phase: task.phase,
       type,
