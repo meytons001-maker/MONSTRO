@@ -34,4 +34,4 @@ export interface MissionEvaluationProgress { iteration: number; accepted: boolea
 export interface MissionTraceProgress { build: MissionPatchProgress[]; repairs: MissionPatchProgress[]; evaluations: MissionEvaluationProgress[]; }
 export type MissionEventType = "phase.changed" | "iteration.started" | "observation.completed" | "build.applied" | "repair.completed" | "trace.updated" | "mission.completed" | "mission.failed";
 export interface MissionTransportEvent { id: string; taskId: string; type: MissionEventType; phase: TaskPhase; timestamp: string; detail?: string; data?: { previewUrl?: string; artifacts?: string[]; completedAt?: string; progress?: MissionTraceProgress; [key: string]: unknown }; }
-export { MissionNdjsonParser, parseMissionTransportEvent } from "./transport";
+export { MissionNdjsonParser, parseMissionTransportEvent } from "./transport.js";
