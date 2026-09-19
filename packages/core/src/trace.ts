@@ -72,10 +72,64 @@ export interface MissionTraceSnapshot {
   evaluations: EvaluationIterationTrace[];
 }
 
+function cloneSnapshot(snapshot: MissionTraceSnapshot): MissionTraceSnapshot {
+  return {
+    buildPatches: snapshot.buildPatches.map(clonePatch),
+    repairPatches: snapshot.repairPatches.map(clonePatch),
+    evaluations: snapshot.evaluations.map(cloneEvaluation),
+  };
+}
+
+function isPatch(value: unknown): value is FilePatch {
+  return isRecord(value)
+    && typeof value.path === "string"
+    && (value.operation === "create" || value.operation === "update" || value.operation === "delete")
+    && (value.content === undefined || typeof value.content === "string")
+    && (value.requirementIds === undefined || isStrings(value.requirementIds));
+}
+
+function isEvaluationTrace(value: unknown): value is EvaluationIterationTrace {
+  if (!isRecord(value) || !Number.isInteger(value.iteration) || typeof value.accepted !== "boolean" || typeof value.score !== "number" || !Array.isArray(value.evidenceTrace) || !Array.isArray(value.findings) || !isStrings(value.repairActionIds)) return false;
+  const evidence = value.evidenceTrace.every((item) => isRecord(item) && typeof item.requirementId === "string" && isStrings(item.evidenceSources));
+  const findings = value.findings.every((item) => isRecord(item)
+    && typeof item.code === "string"
+    && typeof item.message === "string"
+    && (item.severity === "error" || item.severity === "warning")
+    && (item.evidenceSource === undefined || typeof item.evidenceSource === "string")
+    && (item.requirementIds === undefined || isStrings(item.requirementIds)));
+  return evidence && findings;
+}
+
+function isSnapshot(value: unknown): value is MissionTraceSnapshot {
+  return isRecord(value)
+    && Array.isArray(value.buildPatches) && value.buildPatches.every(isPatch)
+    && Array.isArray(value.repairPatches) && value.repairPatches.every(isPatch)
+    && Array.isArray(value.evaluations) && value.evaluations.every(isEvaluationTrace);
+}
+
+export function replayMissionTraceSnapshot(events: readonly MissionEvent[]): MissionTraceSnapshot | undefined {
+  let latest: MissionTraceSnapshot | undefined;
+  for (const event of events) {
+    if (event.type !== "trace.updated" || event.data?.snapshot === undefined) continue;
+    if (!isSnapshot(event.data.snapshot)) throw new Error(`Invalid trace snapshot in mission event ${event.id}`);
+    latest = cloneSnapshot(event.data.snapshot);
+  }
+  return latest;
+}
+
 export class MissionTraceCollector {
   private readonly buildPatches: FilePatch[] = [];
   private readonly repairPatches: FilePatch[] = [];
   private readonly evaluations: EvaluationIterationTrace[] = [];
+
+  static hydrate(snapshot?: MissionTraceSnapshot): MissionTraceCollector {
+    const collector = new MissionTraceCollector();
+    if (!snapshot) return collector;
+    collector.buildPatches.push(...snapshot.buildPatches.map(clonePatch));
+    collector.repairPatches.push(...snapshot.repairPatches.map(clonePatch));
+    collector.evaluations.push(...snapshot.evaluations.map(cloneEvaluation));
+    return collector;
+  }
 
   recordBuild(patches: FilePatch[]): void { this.buildPatches.push(...patches.map(clonePatch)); }
   recordRepair(patches: FilePatch[]): void { this.repairPatches.push(...patches.map(clonePatch)); }
