@@ -47,6 +47,27 @@ test("FileMissionJournalStore persists NDJSON and replays after a new store inst
   }
 });
 
+test("FileMissionJournalStore lists persisted task ids without exposing unrelated files", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "monstro-journal-"));
+  try {
+    const store = new FileMissionJournalStore({ directory });
+    await new MissionJournal(store).record(task("mission/zeta"), "phase.changed", "started");
+    await new MissionJournal(store).record(task("alpha mission"), "phase.changed", "started");
+    await writeFile(join(directory, "README.txt"), "ignore me", "utf8");
+    await writeFile(join(directory, "%ZZ.ndjson"), "ignore malformed filename", "utf8");
+
+    assert.deepEqual(await store.listTaskIds(), ["alpha mission", "mission/zeta"]);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("FileMissionJournalStore returns an empty index before the journal directory exists", async () => {
+  const directory = join(tmpdir(), `monstro-journal-missing-${Date.now()}-${Math.random()}`);
+  const store = new FileMissionJournalStore({ directory });
+  assert.deepEqual(await store.listTaskIds(), []);
+});
+
 test("FileMissionJournalStore serializes concurrent appends per mission", async () => {
   const directory = await mkdtemp(join(tmpdir(), "monstro-journal-"));
   try {
