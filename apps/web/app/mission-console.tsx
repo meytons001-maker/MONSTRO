@@ -1,7 +1,8 @@
 "use client";
 
 import { MissionNdjsonParser, type MissionTransportEvent } from "@monstro/contracts";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
+import { formatMissionHistoryLabel, parseMissionHistoryPayload, type MissionHistoryItem } from "../lib/mission-history";
 
 const pipeline = ["understand", "inspect", "plan", "build", "run", "observe", "evaluate", "repair", "deliver"];
 
@@ -17,12 +18,28 @@ export function MissionConsole() {
   const [previewRevision, setPreviewRevision] = useState(0);
   const [taskId, setTaskId] = useState("");
   const [restoreId, setRestoreId] = useState("");
+  const [history, setHistory] = useState<MissionHistoryItem[]>([]);
+  const [historyError, setHistoryError] = useState("");
 
   const latest = events.at(-1);
   const activeIndex = latest ? pipeline.indexOf(latest.phase) : -1;
   const previewUrl = [...events].reverse().find((event) => event.data?.previewUrl)?.data?.previewUrl;
   const progress = [...events].reverse().find((event) => event.type === "trace.updated" && event.data?.progress)?.data?.progress;
   const previewSrc = previewUrl ? `${previewUrl}${previewUrl.includes("?") ? "&" : "?"}rev=${previewRevision}` : undefined;
+
+  async function refreshHistory() {
+    try {
+      const response = await fetch("/api/missions", { cache: "no-store" });
+      if (!response.ok) throw new Error("Mission history unavailable");
+      const missions = parseMissionHistoryPayload(await response.json());
+      setHistory(missions);
+      setHistoryError("");
+    } catch (error) {
+      setHistoryError(error instanceof Error ? error.message : "Mission history unavailable");
+    }
+  }
+
+  useEffect(() => { void refreshHistory(); }, []);
 
   function clientFailure(detail: string) {
     setEvents((current) => [...current, { id: `client:error:${Date.now()}`, taskId: taskId || "client", type: "mission.failed", phase: "failed", timestamp: new Date().toISOString(), detail }]);
@@ -45,7 +62,7 @@ export function MissionConsole() {
         if (done) { const tail = parser.finish(); if (tail.length) setEvents((current) => [...current, ...tail]); break; }
       }
     } catch (error) { clientFailure(error instanceof Error ? error.message : "Unknown error"); }
-    finally { setRunning(false); }
+    finally { setRunning(false); await refreshHistory(); }
   }
 
   async function restore(event: FormEvent) {
@@ -71,7 +88,7 @@ export function MissionConsole() {
 
   return <div className="missionConsole">
     <form className="prompt" onSubmit={execute}><span>›</span><input aria-label="Prompt" value={intent} onChange={(event) => setIntent(event.target.value)} placeholder="Diga ao Monstro o que construir..."/><button disabled={running}>{running ? "RUNNING" : "EXECUTE"}</button></form>
-    <form className="prompt" onSubmit={restore}><span>↺</span><input aria-label="Mission task ID" value={restoreId} onChange={(event) => setRestoreId(event.target.value)} placeholder="Reabrir missão pelo taskId..."/><button disabled={running || !restoreId.trim()}>RESTORE</button></form>
+    <form className="prompt historyPrompt" onSubmit={restore}><span>↺</span><select aria-label="Mission history" value={restoreId} onChange={(event) => setRestoreId(event.target.value)}><option value="">{historyError ? historyError : history.length ? "Selecione uma missão persistida..." : "Nenhuma missão persistida"}</option>{history.map((mission) => <option key={mission.taskId} value={mission.taskId}>{formatMissionHistoryLabel(mission)}</option>)}</select><button type="button" disabled={running} onClick={() => void refreshHistory()}>REFRESH</button><button disabled={running || !restoreId.trim()}>RESTORE</button></form>
     {taskId ? <div className="missionFeed"><div><b>MISSION</b> {taskId}</div></div> : null}
     <div className="missionFeed">{events.slice(-4).map((event) => <div key={event.id}><b>{event.phase.toUpperCase()}</b> {event.type}{event.detail ? ` · ${event.detail}` : ""}</div>)}</div>
     <div className="pipeline livePipeline">{pipeline.map((phase, index) => <div key={phase} className={index < activeIndex ? "done" : index === activeIndex ? "running" : ""}><b>{String(index + 1).padStart(2,"0")}</b><span>{phase.toUpperCase()}</span></div>)}</div>
