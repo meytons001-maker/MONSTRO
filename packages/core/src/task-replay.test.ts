@@ -60,7 +60,7 @@ test("returns undefined for journals created before task checkpoints", () => {
 test("rejects malformed or cross-mission checkpoints", () => {
   const base = { id: "resume-1:1", taskId: "resume-1", phase: "run" as const, type: "phase.changed" as const, timestamp: new Date().toISOString() };
   assert.throws(() => replayMissionTask([{ ...base, data: { task: { nope: true } } }]), /Invalid task checkpoint/);
-  assert.throws(() => replayMissionTask([{ ...base, data: { task: { ...task(), id: "other" } }]), /different mission/);
+  assert.throws(() => replayMissionTask([{ ...base, data: { task: { ...task(), id: "other" } } }]), /different mission/);
 });
 
 test("resume policy refuses completed or legacy missions", () => {
