@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { MissionNdjsonParser, parseMissionTransportEvent } from "./transport";
+import { MissionNdjsonParser, parseMissionTransportEvent } from "./transport.js";
 
 const event = { id: "event:1", taskId: "task:1", type: "trace.updated", phase: "evaluate", timestamp: "2026-09-18T22:00:00.000Z", data: { progress: { build: [{ path: "index.html", operation: "create", requirementIds: ["acceptance:title"] }], repairs: [], evaluations: [{ iteration: 1, accepted: true, score: 1, requirementIds: ["acceptance:title"], findingCodes: [], repairActionIds: [] }] } } };
 
