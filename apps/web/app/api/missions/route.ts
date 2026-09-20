@@ -12,7 +12,8 @@ export async function GET(request: Request) {
     if (!taskId) return Response.json({ missions: await listPersistedMissions() }, { headers: { "Cache-Control": "no-store" } });
     const mission = await loadPersistedMission(taskId);
     if (mission.events.length === 0) return Response.json({ error: "Mission not found." }, { status: 404 });
-    return Response.json(mission, { headers: { "Cache-Control": "no-store" } });
+    const effectiveResume = await resolveEffectiveMissionResume(mission.resume);
+    return Response.json({ ...mission, effectiveResume }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     return Response.json({ error: "Mission journal could not be replayed.", detail: error instanceof Error ? error.message : "unknown error" }, { status: 500 });
   }
