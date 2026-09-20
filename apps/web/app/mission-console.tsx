@@ -12,6 +12,7 @@ import {
   isMissionConsoleBusy,
   missionConsoleOperationLabel,
 } from "../lib/mission-console-lifecycle";
+import { deriveMissionConsoleStatus } from "../lib/mission-console-status";
 import { formatMissionHistoryLabel, parseMissionHistoryPayload, type MissionHistoryItem } from "../lib/mission-history";
 
 export function MissionConsole() {
@@ -26,6 +27,7 @@ export function MissionConsole() {
   const [historyError, setHistoryError] = useState("");
 
   const view = deriveMissionConsoleView({ events, history, restoreId, missionDetail });
+  const status = deriveMissionConsoleStatus(lifecycle, view);
   const previewSrc = view.previewUrl ? `${view.previewUrl}${view.previewUrl.includes("?") ? "&" : "?"}rev=${previewRevision}` : undefined;
   const busy = isMissionConsoleBusy(lifecycle);
   const operationLabel = missionConsoleOperationLabel(lifecycle);
@@ -102,8 +104,8 @@ export function MissionConsole() {
   return <div className="missionConsole">
     <form className="prompt" onSubmit={execute}><span>›</span><input aria-label="Prompt" value={intent} onChange={(event) => setIntent(event.target.value)} placeholder="Diga ao Monstro o que construir..."/><button disabled={busy}>{lifecycle.operation === "executing" ? operationLabel : "EXECUTE"}</button></form>
     <form className="prompt historyPrompt" onSubmit={restore}><span>↺</span><select aria-label="Mission history" value={restoreId} onChange={(event) => { setRestoreId(event.target.value); setMissionDetail(null); }}><option value="">{historyError ? historyError : history.length ? "Selecione uma missão persistida..." : "Nenhuma missão persistida"}</option>{history.map((mission) => <option key={mission.taskId} value={mission.taskId}>{formatMissionHistoryLabel(mission)}</option>)}</select><button type="button" disabled={busy} onClick={() => void refreshHistory()}>REFRESH</button><button disabled={busy || !restoreId.trim()}>{lifecycle.operation === "restoring" ? operationLabel : "RESTORE"}</button><button type="button" disabled={busy || !view.canResume} title={view.resumeReason} onClick={() => void resume()}>{lifecycle.operation === "resuming" ? operationLabel : view.canResume ? view.resumeLabel : "RESUME"}</button></form>
-    {lifecycle.failure ? <div className="missionFeed"><div><b>CLIENT</b> {lifecycle.failure}</div></div> : null}
-    {taskId ? <div className="missionFeed"><div><b>MISSION</b> {taskId} · {view.executionState.toUpperCase()}{view.activePhase ? ` · ${view.activePhase.toUpperCase()}` : ""}{missionDetail?.taskId === taskId ? ` · ${formatMissionResumeAction(missionDetail.effectiveResume)}` : ""}</div></div> : null}
+    {status.failure ? <div className="missionFeed"><div><b>CLIENT</b> {status.failure}</div></div> : null}
+    {taskId ? <div className="missionFeed"><div><b>MISSION</b> {taskId} · {status.label}{missionDetail?.taskId === taskId ? ` · ${formatMissionResumeAction(missionDetail.effectiveResume)}` : ""}</div></div> : null}
     <div className="missionFeed">{events.slice(-4).map((event) => <div key={event.id}><b>{event.phase.toUpperCase()}</b> {event.type}{event.detail ? ` · ${event.detail}` : ""}</div>)}</div>
     <div className="pipeline livePipeline">{missionPipeline.map((phase, index) => <div key={phase} className={index < view.activeIndex ? "done" : index === view.activeIndex ? "running" : ""}><b>{String(index + 1).padStart(2,"0")}</b><span>{phase.toUpperCase()}</span></div>)}</div>
     {view.progress ? <section className="traceProgress" aria-label="Mission trace progress"><div><b>BUILD</b><strong>{view.progress.build.length}</strong><span>{view.progress.build.at(-1)?.path ?? "—"}</span></div><div><b>EVALUATE</b><strong>{view.progress.evaluations.at(-1)?.score ?? "—"}</strong><span>{view.progress.evaluations.at(-1)?.accepted ? "ACCEPTED" : view.progress.evaluations.length ? "REVIEW" : "WAITING"}</span></div><div><b>REPAIR</b><strong>{view.progress.repairs.length}</strong><span>{view.progress.repairs.at(-1)?.path ?? "—"}</span></div><div><b>REQUIREMENTS</b><strong>{new Set([...view.progress.build.flatMap((item) => item.requirementIds), ...view.progress.evaluations.flatMap((item) => item.requirementIds)]).size}</strong><span>{view.progress.evaluations.at(-1)?.findingCodes.join(", ") || "TRACKED"}</span></div></section> : null}
