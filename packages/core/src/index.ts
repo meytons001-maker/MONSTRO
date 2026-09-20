@@ -17,6 +17,7 @@ export interface Evaluator { evaluate(task: MonstroTask, runtime: RuntimeResult,
 export interface Repairer { repair(task: MonstroTask, evaluation: Evaluation): Promise<FilePatch[]>; }
 export interface Exporter { deliver(task: MonstroTask, runtime: RuntimeResult, evaluation: Evaluation): Promise<Delivery>; }
 export interface MonstroServices { inspector: Inspector; architect: Architect; builder: Builder; runtime: Runtime; observer: Observer; evaluator: Evaluator; repairer: Repairer; exporter: Exporter; }
+export interface MissionResumeOptions { restartPhase?: "inspect"; reason?: string; }
 
 function requirementIds(patches: FilePatch[]): string[] {
   return [...new Set(patches.flatMap((patch) => patch.requirementIds ?? []))];
@@ -99,12 +100,14 @@ export class MonstroOrchestrator {
     }
   }
 
-  async resume(events: readonly MissionEvent[]): Promise<Delivery> {
+  async resume(events: readonly MissionEvent[], options: MissionResumeOptions = {}): Promise<Delivery> {
     const decision = planMissionResume(events);
     if (!decision.resumable || !decision.task || !decision.restartPhase) throw new Error(decision.reason);
     const task = structuredClone(decision.task);
-    await this.journal.record(task, "mission.resumed", decision.reason, { restartPhase: decision.restartPhase });
-    if (decision.restartPhase === "inspect") return this.execute(task);
+    const restartPhase = options.restartPhase ?? decision.restartPhase;
+    const reason = options.reason ?? decision.reason;
+    await this.journal.record(task, "mission.resumed", reason, { restartPhase });
+    if (restartPhase === "inspect") return this.execute(task);
 
     const plan = replayMissionBuildPlan(events);
     if (!plan) throw new Error("Mission cannot resume from run without a durable build plan");
