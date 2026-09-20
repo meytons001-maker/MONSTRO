@@ -28,10 +28,15 @@ export function parseMissionHistoryPayload(payload: unknown): MissionHistoryItem
   });
 }
 
+export function formatMissionResumeAction(mission: MissionHistoryItem) {
+  if (!mission.resumable) return "READ ONLY";
+  if (mission.restartPhase === "inspect") return "REBUILD FROM INSPECT";
+  return `RESUME ${mission.restartPhase?.toUpperCase() ?? "SAFE"}`;
+}
+
 export function formatMissionHistoryLabel(mission: MissionHistoryItem) {
   const phase = (mission.phase || "unknown").toUpperCase();
   const date = mission.updatedAt ? new Date(mission.updatedAt) : null;
   const timestamp = date && !Number.isNaN(date.getTime()) ? date.toLocaleString() : "unknown time";
-  const resume = mission.resumable ? `RESUME ${mission.restartPhase?.toUpperCase() ?? "SAFE"}` : "READ ONLY";
-  return `${resume} · ${phase} · ${mission.eventCount} events · ${timestamp} · ${mission.taskId}`;
+  return `${formatMissionResumeAction(mission)} · ${phase} · ${mission.eventCount} events · ${timestamp} · ${mission.taskId}`;
 }

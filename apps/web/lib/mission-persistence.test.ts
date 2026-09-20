@@ -20,7 +20,7 @@ function task(id: string): MonstroTask {
   };
 }
 
-test("persisted mission API exposes the conservative resume decision", async () => {
+test("persisted mission history degrades run to inspect when workspace is unavailable", async () => {
   const directory = await mkdtemp(join(tmpdir(), "monstro-web-resume-"));
   const previous = process.env.MONSTRO_MISSION_JOURNAL_DIR;
   process.env.MONSTRO_MISSION_JOURNAL_DIR = directory;
@@ -40,8 +40,9 @@ test("persisted mission API exposes the conservative resume decision", async () 
     const history = await listPersistedMissions();
     assert.equal(history.length, 1);
     assert.equal(history[0]?.resumable, true);
-    assert.equal(history[0]?.restartPhase, "run");
-    assert.match(history[0]?.resumeReason ?? "", /durably recorded/);
+    assert.equal(history[0]?.restartPhase, "inspect");
+    assert.match(history[0]?.resumeReason ?? "", /rebuilding conservatively from inspect/i);
+    assert.match(history[0]?.resumeReason ?? "", /workspace is unavailable/i);
   } finally {
     if (previous === undefined) delete process.env.MONSTRO_MISSION_JOURNAL_DIR;
     else process.env.MONSTRO_MISSION_JOURNAL_DIR = previous;
