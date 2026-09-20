@@ -2,6 +2,7 @@ import { createMission } from "../../../lib/mission-runtime";
 import { createResumableMissionRuntime } from "../../../lib/mission-resume-runtime";
 import { createMissionJournalStore, listPersistedMissions, loadPersistedMission } from "../../../lib/mission-persistence";
 import { createMissionEventStream } from "../../../lib/mission-stream";
+import { checkMissionWorkspaceForRun } from "../../../lib/mission-workspace";
 
 export const runtime = "nodejs";
 
@@ -32,6 +33,12 @@ export async function POST(request: Request) {
     if (persisted.events.length === 0) return Response.json({ error: "Mission not found." }, { status: 404 });
     if (!persisted.resume.resumable || !persisted.resume.task) {
       return Response.json({ error: "Mission cannot be resumed safely.", reason: persisted.resume.reason }, { status: 409 });
+    }
+    if (persisted.resume.restartPhase === "run") {
+      const workspace = await checkMissionWorkspaceForRun(persisted.resume.task);
+      if (!workspace.ready) {
+        return Response.json({ error: "Mission workspace is not ready for safe resume.", reason: workspace.reason, restartPhase: "inspect" }, { status: 409 });
+      }
     }
 
     const { task, events, journal, orchestrator } = createResumableMissionRuntime(persisted.resume.task, persisted.events);
