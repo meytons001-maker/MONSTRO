@@ -7,6 +7,10 @@ export type MissionResumeView = {
   degraded: boolean;
 };
 
+export type MissionResumePresentation = Pick<MissionResumeView, "resumable" | "restartPhase"> & {
+  degraded?: boolean;
+};
+
 export type MissionDetail = {
   taskId: string;
   events: MissionTransportEvent[];
@@ -14,12 +18,14 @@ export type MissionDetail = {
 };
 
 export function toMissionResumeView(decision: MissionResumeView): MissionResumeView {
-  return {
-    resumable: decision.resumable,
-    restartPhase: decision.restartPhase,
-    reason: decision.reason,
-    degraded: decision.degraded,
-  };
+  return { resumable: decision.resumable, restartPhase: decision.restartPhase, reason: decision.reason, degraded: decision.degraded };
+}
+
+export function formatMissionResumeAction(resume: MissionResumePresentation | undefined): string {
+  if (!resume?.resumable) return "READ ONLY";
+  const restartPhase = resume.restartPhase?.toUpperCase();
+  if (resume.degraded || resume.restartPhase === "inspect") return `REBUILD FROM ${restartPhase ?? "INSPECT"}`;
+  return `RESUME ${restartPhase ?? "SAFE"}`;
 }
 
 export function parseMissionDetailPayload(payload: unknown): MissionDetail {
@@ -32,8 +38,6 @@ export function parseMissionDetailPayload(payload: unknown): MissionDetail {
     || typeof resume.resumable !== "boolean"
     || (resume.restartPhase !== null && typeof resume.restartPhase !== "string")
     || typeof resume.reason !== "string"
-    || typeof resume.degraded !== "boolean") {
-    throw new Error("Mission detail response is invalid");
-  }
+    || typeof resume.degraded !== "boolean") throw new Error("Mission detail response is invalid");
   return candidate as MissionDetail;
 }
