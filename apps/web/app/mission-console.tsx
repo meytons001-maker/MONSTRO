@@ -2,11 +2,15 @@
 
 import { MissionNdjsonParser, type MissionTransportEvent } from "@monstro/contracts";
 import { FormEvent, useEffect, useState } from "react";
+import { parseMissionDetailPayload, type MissionDetail, type MissionResumeView } from "../lib/mission-detail";
 import { formatMissionHistoryLabel, parseMissionHistoryPayload, type MissionHistoryItem } from "../lib/mission-history";
 
 const pipeline = ["understand", "inspect", "plan", "build", "run", "observe", "evaluate", "repair", "deliver"];
 
-type PersistedMission = { taskId: string; events: MissionTransportEvent[] };
+function resumeActionLabel(resume: MissionResumeView | undefined) {
+  if (!resume?.resumable) return "READ ONLY";
+  return resume.degraded ? `REBUILD FROM ${resume.restartPhase?.toUpperCase() ?? "INSPECT"}` : `RESUME ${resume.restartPhase?.toUpperCase() ?? ""}`;
+}
 
 export function MissionConsole() {
   const [intent, setIntent] = useState("Crie uma experiência web cinematográfica e valide o resultado.");
@@ -16,6 +20,7 @@ export function MissionConsole() {
   const [taskId, setTaskId] = useState("");
   const [restoreId, setRestoreId] = useState("");
   const [history, setHistory] = useState<MissionHistoryItem[]>([]);
+  const [missionDetail, setMissionDetail] = useState<MissionDetail | null>(null);
   const [historyError, setHistoryError] = useState("");
 
   const latest = events.at(-1);
@@ -24,6 +29,7 @@ export function MissionConsole() {
   const progress = [...events].reverse().find((event) => event.type === "trace.updated" && event.data?.progress)?.data?.progress;
   const previewSrc = previewUrl ? `${previewUrl}${previewUrl.includes("?") ? "&" : "?"}rev=${previewRevision}` : undefined;
   const selectedMission = history.find((mission) => mission.taskId === restoreId);
+  const selectedResume = missionDetail?.taskId === restoreId ? missionDetail.effectiveResume : undefined;
 
   async function refreshHistory() {
     try {
@@ -57,17 +63,19 @@ export function MissionConsole() {
 
   async function loadMission(requestedTaskId: string) {
     const response = await fetch(`/api/missions?taskId=${encodeURIComponent(requestedTaskId)}`, { cache: "no-store" });
-    const payload = (await response.json()) as PersistedMission | { error?: string; detail?: string };
-    if (!response.ok || !("events" in payload) || !Array.isArray(payload.events)) {
-      const failure = "error" in payload ? payload.detail || payload.error : undefined;
+    const payload = await response.json();
+    if (!response.ok) {
+      const failure = payload && typeof payload === "object" ? (payload as { error?: string; detail?: string }).detail || (payload as { error?: string }).error : undefined;
       throw new Error(failure || "Mission could not be restored");
     }
-    setEvents(payload.events); setTaskId(payload.taskId || requestedTaskId); setRestoreId(payload.taskId || requestedTaskId);
+    const detail = parseMissionDetailPayload(payload);
+    setMissionDetail(detail); setEvents(detail.events); setTaskId(detail.taskId); setRestoreId(detail.taskId);
+    return detail;
   }
 
   async function execute(event: FormEvent) {
     event.preventDefault(); if (!intent.trim() || running) return;
-    setEvents([]); setRunning(true); setPreviewRevision(0); setTaskId("");
+    setEvents([]); setMissionDetail(null); setRunning(true); setPreviewRevision(0); setTaskId("");
     try { await consumeMissionStream(await fetch("/api/missions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ intent }) })); }
     catch (error) { clientFailure(error instanceof Error ? error.message : "Unknown error"); }
     finally { setRunning(false); await refreshHistory(); }
@@ -77,7 +85,7 @@ export function MissionConsole() {
     event.preventDefault(); const requestedTaskId = restoreId.trim(); if (!requestedTaskId || running) return;
     setRunning(true); setPreviewRevision(0);
     try { await loadMission(requestedTaskId); }
-    catch (error) { setEvents([]); clientFailure(error instanceof Error ? error.message : "Unknown restore error"); }
+    catch (error) { setEvents([]); setMissionDetail(null); clientFailure(error instanceof Error ? error.message : "Unknown restore error"); }
     finally { setRunning(false); }
   }
 
@@ -85,7 +93,8 @@ export function MissionConsole() {
     const requestedTaskId = restoreId.trim(); if (!requestedTaskId || running || !selectedMission?.resumable) return;
     setRunning(true); setPreviewRevision(0);
     try {
-      await loadMission(requestedTaskId);
+      const detail = await loadMission(requestedTaskId);
+      if (!detail.effectiveResume.resumable) throw new Error(detail.effectiveResume.reason);
       await consumeMissionStream(await fetch("/api/missions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ resumeTaskId: requestedTaskId }) }));
     } catch (error) { clientFailure(error instanceof Error ? error.message : "Unknown resume error"); }
     finally { setRunning(false); await refreshHistory(); }
@@ -93,8 +102,8 @@ export function MissionConsole() {
 
   return <div className="missionConsole">
     <form className="prompt" onSubmit={execute}><span>›</span><input aria-label="Prompt" value={intent} onChange={(event) => setIntent(event.target.value)} placeholder="Diga ao Monstro o que construir..."/><button disabled={running}>{running ? "RUNNING" : "EXECUTE"}</button></form>
-    <form className="prompt historyPrompt" onSubmit={restore}><span>↺</span><select aria-label="Mission history" value={restoreId} onChange={(event) => setRestoreId(event.target.value)}><option value="">{historyError ? historyError : history.length ? "Selecione uma missão persistida..." : "Nenhuma missão persistida"}</option>{history.map((mission) => <option key={mission.taskId} value={mission.taskId}>{formatMissionHistoryLabel(mission)}</option>)}</select><button type="button" disabled={running} onClick={() => void refreshHistory()}>REFRESH</button><button disabled={running || !restoreId.trim()}>RESTORE</button><button type="button" disabled={running || !selectedMission?.resumable} title={selectedMission?.resumeReason} onClick={() => void resume()}>{selectedMission?.resumable ? `RESUME ${selectedMission.restartPhase?.toUpperCase() ?? ""}` : "RESUME"}</button></form>
-    {taskId ? <div className="missionFeed"><div><b>MISSION</b> {taskId}{selectedMission ? ` · ${selectedMission.resumable ? `SAFE RESUME ${selectedMission.restartPhase?.toUpperCase() ?? ""}` : "READ ONLY"}` : ""}</div></div> : null}
+    <form className="prompt historyPrompt" onSubmit={restore}><span>↺</span><select aria-label="Mission history" value={restoreId} onChange={(event) => { setRestoreId(event.target.value); setMissionDetail(null); }}><option value="">{historyError ? historyError : history.length ? "Selecione uma missão persistida..." : "Nenhuma missão persistida"}</option>{history.map((mission) => <option key={mission.taskId} value={mission.taskId}>{formatMissionHistoryLabel(mission)}</option>)}</select><button type="button" disabled={running} onClick={() => void refreshHistory()}>REFRESH</button><button disabled={running || !restoreId.trim()}>RESTORE</button><button type="button" disabled={running || !selectedMission?.resumable} title={selectedResume?.reason ?? selectedMission?.resumeReason} onClick={() => void resume()}>{selectedResume ? resumeActionLabel(selectedResume) : selectedMission?.resumable ? `RESUME ${selectedMission.restartPhase?.toUpperCase() ?? ""}` : "RESUME"}</button></form>
+    {taskId ? <div className="missionFeed"><div><b>MISSION</b> {taskId}{missionDetail?.taskId === taskId ? ` · ${resumeActionLabel(missionDetail.effectiveResume)}` : ""}</div></div> : null}
     <div className="missionFeed">{events.slice(-4).map((event) => <div key={event.id}><b>{event.phase.toUpperCase()}</b> {event.type}{event.detail ? ` · ${event.detail}` : ""}</div>)}</div>
     <div className="pipeline livePipeline">{pipeline.map((phase, index) => <div key={phase} className={index < activeIndex ? "done" : index === activeIndex ? "running" : ""}><b>{String(index + 1).padStart(2,"0")}</b><span>{phase.toUpperCase()}</span></div>)}</div>
     {progress ? <section className="traceProgress" aria-label="Mission trace progress"><div><b>BUILD</b><strong>{progress.build.length}</strong><span>{progress.build.at(-1)?.path ?? "—"}</span></div><div><b>EVALUATE</b><strong>{progress.evaluations.at(-1)?.score ?? "—"}</strong><span>{progress.evaluations.at(-1)?.accepted ? "ACCEPTED" : progress.evaluations.length ? "REVIEW" : "WAITING"}</span></div><div><b>REPAIR</b><strong>{progress.repairs.length}</strong><span>{progress.repairs.at(-1)?.path ?? "—"}</span></div><div><b>REQUIREMENTS</b><strong>{new Set([...progress.build.flatMap((item) => item.requirementIds), ...progress.evaluations.flatMap((item) => item.requirementIds)]).size}</strong><span>{progress.evaluations.at(-1)?.findingCodes.join(", ") || "TRACKED"}</span></div></section> : null}
