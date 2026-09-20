@@ -4,6 +4,9 @@ export type MissionHistoryItem = {
   status: string | null;
   updatedAt: string | null;
   eventCount: number;
+  resumable: boolean;
+  restartPhase: string | null;
+  resumeReason: string;
 };
 
 export function parseMissionHistoryPayload(payload: unknown): MissionHistoryItem[] {
@@ -18,7 +21,10 @@ export function parseMissionHistoryPayload(payload: unknown): MissionHistoryItem
       && (candidate.phase === null || typeof candidate.phase === "string")
       && (candidate.status === null || typeof candidate.status === "string")
       && (candidate.updatedAt === null || typeof candidate.updatedAt === "string")
-      && typeof candidate.eventCount === "number";
+      && typeof candidate.eventCount === "number"
+      && typeof candidate.resumable === "boolean"
+      && (candidate.restartPhase === null || typeof candidate.restartPhase === "string")
+      && typeof candidate.resumeReason === "string";
   });
 }
 
@@ -26,5 +32,6 @@ export function formatMissionHistoryLabel(mission: MissionHistoryItem) {
   const phase = (mission.phase || "unknown").toUpperCase();
   const date = mission.updatedAt ? new Date(mission.updatedAt) : null;
   const timestamp = date && !Number.isNaN(date.getTime()) ? date.toLocaleString() : "unknown time";
-  return `${phase} · ${mission.eventCount} events · ${timestamp} · ${mission.taskId}`;
+  const resume = mission.resumable ? `RESUME ${mission.restartPhase?.toUpperCase() ?? "SAFE"}` : "READ ONLY";
+  return `${resume} · ${phase} · ${mission.eventCount} events · ${timestamp} · ${mission.taskId}`;
 }
