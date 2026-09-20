@@ -1,8 +1,8 @@
 import { createMission } from "../../../lib/mission-runtime";
 import { createResumableMissionRuntime } from "../../../lib/mission-resume-runtime";
+import { resolveEffectiveMissionResume } from "../../../lib/mission-resume-decision";
 import { createMissionJournalStore, listPersistedMissions, loadPersistedMission } from "../../../lib/mission-persistence";
 import { createMissionEventStream } from "../../../lib/mission-stream";
-import { checkMissionWorkspaceForRun } from "../../../lib/mission-workspace";
 
 export const runtime = "nodejs";
 
@@ -31,27 +31,20 @@ export async function POST(request: Request) {
       return Response.json({ error: "Mission journal could not be replayed.", detail: error instanceof Error ? error.message : "unknown error" }, { status: 500 });
     }
     if (persisted.events.length === 0) return Response.json({ error: "Mission not found." }, { status: 404 });
-    if (!persisted.resume.resumable || !persisted.resume.task) {
-      return Response.json({ error: "Mission cannot be resumed safely.", reason: persisted.resume.reason }, { status: 409 });
+
+    const resume = await resolveEffectiveMissionResume(persisted.resume);
+    if (!resume.resumable || !resume.task) {
+      return Response.json({ error: "Mission cannot be resumed safely.", reason: resume.reason }, { status: 409 });
     }
 
-    let resumePhase = persisted.resume.restartPhase ?? "inspect";
-    let resumeReason: string | undefined;
-    if (resumePhase === "run") {
-      const workspace = await checkMissionWorkspaceForRun(persisted.resume.task);
-      if (!workspace.ready) {
-        resumePhase = "inspect";
-        resumeReason = `Workspace cannot continue from run; rebuilding conservatively from inspect. ${workspace.reason}`;
-      }
-    }
-
-    const { task, events, journal, orchestrator } = createResumableMissionRuntime(persisted.resume.task, persisted.events);
+    const resumePhase = resume.restartPhase ?? "inspect";
+    const { task, events, journal, orchestrator } = createResumableMissionRuntime(resume.task, persisted.events);
     return createMissionEventStream({
       task,
       journal,
       sink: store,
       resumePhase,
-      execute: () => orchestrator.resume(events, resumePhase === "inspect" ? { restartPhase: "inspect", reason: resumeReason } : undefined),
+      execute: () => orchestrator.resume(events, resume.degraded ? { restartPhase: "inspect", reason: resume.reason } : undefined),
     });
   }
 
