@@ -8,6 +8,7 @@ export type MissionEventType =
   | "build.applied"
   | "trace.updated"
   | "repair.completed"
+  | "mission.resumed"
   | "mission.completed"
   | "mission.failed";
 
