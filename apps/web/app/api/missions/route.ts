@@ -34,10 +34,14 @@ export async function POST(request: Request) {
     if (!persisted.resume.resumable || !persisted.resume.task) {
       return Response.json({ error: "Mission cannot be resumed safely.", reason: persisted.resume.reason }, { status: 409 });
     }
-    if (persisted.resume.restartPhase === "run") {
+
+    let resumePhase = persisted.resume.restartPhase ?? "inspect";
+    let resumeReason: string | undefined;
+    if (resumePhase === "run") {
       const workspace = await checkMissionWorkspaceForRun(persisted.resume.task);
       if (!workspace.ready) {
-        return Response.json({ error: "Mission workspace is not ready for safe resume.", reason: workspace.reason, restartPhase: "inspect" }, { status: 409 });
+        resumePhase = "inspect";
+        resumeReason = `Workspace cannot continue from run; rebuilding conservatively from inspect. ${workspace.reason}`;
       }
     }
 
@@ -46,8 +50,8 @@ export async function POST(request: Request) {
       task,
       journal,
       sink: store,
-      resumePhase: persisted.resume.restartPhase ?? "unknown",
-      execute: () => orchestrator.resume(events),
+      resumePhase,
+      execute: () => orchestrator.resume(events, resumePhase === "inspect" ? { restartPhase: "inspect", reason: resumeReason } : undefined),
     });
   }
 
