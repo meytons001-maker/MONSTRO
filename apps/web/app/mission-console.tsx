@@ -3,9 +3,8 @@
 import { MissionNdjsonParser, type MissionTransportEvent } from "@monstro/contracts";
 import { FormEvent, useEffect, useState } from "react";
 import { formatMissionResumeAction, parseMissionDetailPayload, type MissionDetail } from "../lib/mission-detail";
+import { deriveMissionConsoleView, missionPipeline } from "../lib/mission-console-view";
 import { formatMissionHistoryLabel, parseMissionHistoryPayload, type MissionHistoryItem } from "../lib/mission-history";
-
-const pipeline = ["understand", "inspect", "plan", "build", "run", "observe", "evaluate", "repair", "deliver"];
 
 export function MissionConsole() {
   const [intent, setIntent] = useState("Crie uma experiência web cinematográfica e valide o resultado.");
@@ -18,13 +17,8 @@ export function MissionConsole() {
   const [missionDetail, setMissionDetail] = useState<MissionDetail | null>(null);
   const [historyError, setHistoryError] = useState("");
 
-  const latest = events.at(-1);
-  const activeIndex = latest ? pipeline.indexOf(latest.phase) : -1;
-  const previewUrl = [...events].reverse().find((event) => event.data?.previewUrl)?.data?.previewUrl;
-  const progress = [...events].reverse().find((event) => event.type === "trace.updated" && event.data?.progress)?.data?.progress;
-  const previewSrc = previewUrl ? `${previewUrl}${previewUrl.includes("?") ? "&" : "?"}rev=${previewRevision}` : undefined;
-  const selectedMission = history.find((mission) => mission.taskId === restoreId);
-  const selectedResume = missionDetail?.taskId === restoreId ? missionDetail.effectiveResume : undefined;
+  const view = deriveMissionConsoleView({ events, history, restoreId, missionDetail });
+  const previewSrc = view.previewUrl ? `${view.previewUrl}${view.previewUrl.includes("?") ? "&" : "?"}rev=${previewRevision}` : undefined;
 
   async function refreshHistory() {
     try {
@@ -85,7 +79,7 @@ export function MissionConsole() {
   }
 
   async function resume() {
-    const requestedTaskId = restoreId.trim(); if (!requestedTaskId || running || !selectedMission?.resumable) return;
+    const requestedTaskId = restoreId.trim(); if (!requestedTaskId || running || !view.canResume) return;
     setRunning(true); setPreviewRevision(0);
     try {
       const detail = await loadMission(requestedTaskId);
@@ -97,11 +91,11 @@ export function MissionConsole() {
 
   return <div className="missionConsole">
     <form className="prompt" onSubmit={execute}><span>›</span><input aria-label="Prompt" value={intent} onChange={(event) => setIntent(event.target.value)} placeholder="Diga ao Monstro o que construir..."/><button disabled={running}>{running ? "RUNNING" : "EXECUTE"}</button></form>
-    <form className="prompt historyPrompt" onSubmit={restore}><span>↺</span><select aria-label="Mission history" value={restoreId} onChange={(event) => { setRestoreId(event.target.value); setMissionDetail(null); }}><option value="">{historyError ? historyError : history.length ? "Selecione uma missão persistida..." : "Nenhuma missão persistida"}</option>{history.map((mission) => <option key={mission.taskId} value={mission.taskId}>{formatMissionHistoryLabel(mission)}</option>)}</select><button type="button" disabled={running} onClick={() => void refreshHistory()}>REFRESH</button><button disabled={running || !restoreId.trim()}>RESTORE</button><button type="button" disabled={running || !selectedMission?.resumable} title={selectedResume?.reason ?? selectedMission?.resumeReason} onClick={() => void resume()}>{selectedResume ? formatMissionResumeAction(selectedResume) : selectedMission?.resumable ? `RESUME ${selectedMission.restartPhase?.toUpperCase() ?? ""}` : "RESUME"}</button></form>
+    <form className="prompt historyPrompt" onSubmit={restore}><span>↺</span><select aria-label="Mission history" value={restoreId} onChange={(event) => { setRestoreId(event.target.value); setMissionDetail(null); }}><option value="">{historyError ? historyError : history.length ? "Selecione uma missão persistida..." : "Nenhuma missão persistida"}</option>{history.map((mission) => <option key={mission.taskId} value={mission.taskId}>{formatMissionHistoryLabel(mission)}</option>)}</select><button type="button" disabled={running} onClick={() => void refreshHistory()}>REFRESH</button><button disabled={running || !restoreId.trim()}>RESTORE</button><button type="button" disabled={running || !view.canResume} title={view.resumeReason} onClick={() => void resume()}>{view.canResume ? view.resumeLabel : "RESUME"}</button></form>
     {taskId ? <div className="missionFeed"><div><b>MISSION</b> {taskId}{missionDetail?.taskId === taskId ? ` · ${formatMissionResumeAction(missionDetail.effectiveResume)}` : ""}</div></div> : null}
     <div className="missionFeed">{events.slice(-4).map((event) => <div key={event.id}><b>{event.phase.toUpperCase()}</b> {event.type}{event.detail ? ` · ${event.detail}` : ""}</div>)}</div>
-    <div className="pipeline livePipeline">{pipeline.map((phase, index) => <div key={phase} className={index < activeIndex ? "done" : index === activeIndex ? "running" : ""}><b>{String(index + 1).padStart(2,"0")}</b><span>{phase.toUpperCase()}</span></div>)}</div>
-    {progress ? <section className="traceProgress" aria-label="Mission trace progress"><div><b>BUILD</b><strong>{progress.build.length}</strong><span>{progress.build.at(-1)?.path ?? "—"}</span></div><div><b>EVALUATE</b><strong>{progress.evaluations.at(-1)?.score ?? "—"}</strong><span>{progress.evaluations.at(-1)?.accepted ? "ACCEPTED" : progress.evaluations.length ? "REVIEW" : "WAITING"}</span></div><div><b>REPAIR</b><strong>{progress.repairs.length}</strong><span>{progress.repairs.at(-1)?.path ?? "—"}</span></div><div><b>REQUIREMENTS</b><strong>{new Set([...progress.build.flatMap((item) => item.requirementIds), ...progress.evaluations.flatMap((item) => item.requirementIds)]).size}</strong><span>{progress.evaluations.at(-1)?.findingCodes.join(", ") || "TRACKED"}</span></div></section> : null}
-    <section className="livePreviewStage" aria-label="Live preview"><div className="previewToolbar"><span><i className={previewUrl ? "online" : ""} /> {previewUrl ? "MISSION PREVIEW" : "WAITING FOR BUILD"}</span><div><button type="button" disabled={!previewUrl} onClick={() => setPreviewRevision((value) => value + 1)}>REFRESH</button>{previewUrl ? <a href={previewUrl} target="_blank" rel="noreferrer">OPEN ↗</a> : null}</div></div>{previewSrc ? <iframe key={previewSrc} title="MONSTRO generated preview" src={previewSrc} sandbox="allow-scripts allow-forms allow-modals allow-popups" /> : <div className="previewEmpty"><div className="orb"><div className="core">M</div></div><h1>BUILD. RUN.<br/><em>OBSERVE. REPAIR.</em></h1><p>Execute, restaure ou retome uma missão para renderizar o artefato real aqui.</p></div>}</section>
+    <div className="pipeline livePipeline">{missionPipeline.map((phase, index) => <div key={phase} className={index < view.activeIndex ? "done" : index === view.activeIndex ? "running" : ""}><b>{String(index + 1).padStart(2,"0")}</b><span>{phase.toUpperCase()}</span></div>)}</div>
+    {view.progress ? <section className="traceProgress" aria-label="Mission trace progress"><div><b>BUILD</b><strong>{view.progress.build.length}</strong><span>{view.progress.build.at(-1)?.path ?? "—"}</span></div><div><b>EVALUATE</b><strong>{view.progress.evaluations.at(-1)?.score ?? "—"}</strong><span>{view.progress.evaluations.at(-1)?.accepted ? "ACCEPTED" : view.progress.evaluations.length ? "REVIEW" : "WAITING"}</span></div><div><b>REPAIR</b><strong>{view.progress.repairs.length}</strong><span>{view.progress.repairs.at(-1)?.path ?? "—"}</span></div><div><b>REQUIREMENTS</b><strong>{new Set([...view.progress.build.flatMap((item) => item.requirementIds), ...view.progress.evaluations.flatMap((item) => item.requirementIds)]).size}</strong><span>{view.progress.evaluations.at(-1)?.findingCodes.join(", ") || "TRACKED"}</span></div></section> : null}
+    <section className="livePreviewStage" aria-label="Live preview"><div className="previewToolbar"><span><i className={view.previewUrl ? "online" : ""} /> {view.previewUrl ? "MISSION PREVIEW" : "WAITING FOR BUILD"}</span><div><button type="button" disabled={!view.previewUrl} onClick={() => setPreviewRevision((value) => value + 1)}>REFRESH</button>{view.previewUrl ? <a href={view.previewUrl} target="_blank" rel="noreferrer">OPEN ↗</a> : null}</div></div>{previewSrc ? <iframe key={previewSrc} title="MONSTRO generated preview" src={previewSrc} sandbox="allow-scripts allow-forms allow-modals allow-popups" /> : <div className="previewEmpty"><div className="orb"><div className="core">M</div></div><h1>BUILD. RUN.<br/><em>OBSERVE. REPAIR.</em></h1><p>Execute, restaure ou retome uma missão para renderizar o artefato real aqui.</p></div>}</section>
   </div>;
 }
