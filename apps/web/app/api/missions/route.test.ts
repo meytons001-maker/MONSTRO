@@ -7,7 +7,7 @@ import type { BuildPlan, MonstroTask } from "@monstro/contracts";
 import { MissionJournal } from "@monstro/core";
 import { createMissionJournalStore } from "../../../lib/mission-persistence.ts";
 import { previewRegistry } from "../../../lib/preview-registry.ts";
-import { POST } from "./route.ts";
+import { GET, POST } from "./route.ts";
 
 function request(body: unknown) {
   return new Request("http://localhost/api/missions", {
@@ -15,6 +15,10 @@ function request(body: unknown) {
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   });
+}
+
+function detailRequest(taskId: string) {
+  return new Request(`http://localhost/api/missions?taskId=${encodeURIComponent(taskId)}`);
 }
 
 function task(id: string, rootDir = "."): MonstroTask {
@@ -90,6 +94,27 @@ test("POST returns 409 when the persisted mission is not safely resumable", asyn
     const body = await response.json() as { error?: string; reason?: string };
     assert.equal(body.error, "Mission cannot be resumed safely.");
     assert.match(body.reason ?? "", /already completed/);
+  });
+});
+
+test("GET mission detail exposes the effective resume decision", async () => {
+  await withJournalDirectory(async (directory) => {
+    const current = task("detail-missing-workspace", directory);
+    current.phase = "build";
+    await persistConfirmedBuild(current);
+
+    const response = await GET(detailRequest(current.id));
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("cache-control"), "no-store");
+    const body = await response.json() as {
+      resume?: { restartPhase?: string | null };
+      effectiveResume?: { resumable?: boolean; restartPhase?: string | null; degraded?: boolean; reason?: string };
+    };
+    assert.equal(body.resume?.restartPhase, "run");
+    assert.equal(body.effectiveResume?.resumable, true);
+    assert.equal(body.effectiveResume?.restartPhase, "inspect");
+    assert.equal(body.effectiveResume?.degraded, true);
+    assert.match(body.effectiveResume?.reason ?? "", /rebuilding conservatively from inspect/i);
   });
 });
 
