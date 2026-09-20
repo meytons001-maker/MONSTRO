@@ -60,6 +60,28 @@ test("resume from confirmed build starts at run without replaying build side eff
   assert.equal(resumedJournal.snapshot().at(-1)?.type, "mission.completed");
 });
 
+test("resume can conservatively downgrade a confirmed build to inspect", async () => {
+  const persisted = new MissionJournal();
+  const checkpoint = task("build");
+  await persisted.record(checkpoint, "phase.changed", undefined, { task: structuredClone(checkpoint) });
+  await persisted.record(checkpoint, "build.applied", "already applied", { plan: structuredClone(plan), requirementIds: ["acceptance:ok"] });
+
+  const calls = { build: 0, apply: 0, run: 0 };
+  const resumedJournal = new MissionJournal();
+  await new MonstroOrchestrator(services(calls), resumedJournal).resume(persisted.snapshot(), {
+    restartPhase: "inspect",
+    reason: "workspace missing; rebuild from inspect",
+  });
+
+  assert.deepEqual(calls, { build: 1, apply: 1, run: 1 });
+  const events = resumedJournal.snapshot();
+  assert.equal(events[0]?.type, "mission.resumed");
+  assert.equal(events[0]?.data?.restartPhase, "inspect");
+  assert.match(events[0]?.detail ?? "", /workspace missing/);
+  assert.equal(events[1]?.type, "phase.changed");
+  assert.equal(events[1]?.phase, "inspect");
+});
+
 test("resume rejects completed missions before invoking services", async () => {
   const persisted = new MissionJournal();
   const checkpoint = task("deliver");
