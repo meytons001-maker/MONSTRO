@@ -4,12 +4,20 @@ import { MissionNdjsonParser, type MissionTransportEvent } from "@monstro/contra
 import { FormEvent, useEffect, useState } from "react";
 import { formatMissionResumeAction, parseMissionDetailPayload, type MissionDetail } from "../lib/mission-detail";
 import { deriveMissionConsoleView, missionPipeline } from "../lib/mission-console-view";
+import {
+  beginMissionConsoleOperation,
+  completeMissionConsoleOperation,
+  failMissionConsoleOperation,
+  initialMissionConsoleLifecycle,
+  isMissionConsoleBusy,
+  missionConsoleOperationLabel,
+} from "../lib/mission-console-lifecycle";
 import { formatMissionHistoryLabel, parseMissionHistoryPayload, type MissionHistoryItem } from "../lib/mission-history";
 
 export function MissionConsole() {
   const [intent, setIntent] = useState("Crie uma experiência web cinematográfica e valide o resultado.");
   const [events, setEvents] = useState<MissionTransportEvent[]>([]);
-  const [running, setRunning] = useState(false);
+  const [lifecycle, setLifecycle] = useState(initialMissionConsoleLifecycle);
   const [previewRevision, setPreviewRevision] = useState(0);
   const [taskId, setTaskId] = useState("");
   const [restoreId, setRestoreId] = useState("");
@@ -19,6 +27,8 @@ export function MissionConsole() {
 
   const view = deriveMissionConsoleView({ events, history, restoreId, missionDetail });
   const previewSrc = view.previewUrl ? `${view.previewUrl}${view.previewUrl.includes("?") ? "&" : "?"}rev=${previewRevision}` : undefined;
+  const busy = isMissionConsoleBusy(lifecycle);
+  const operationLabel = missionConsoleOperationLabel(lifecycle);
 
   async function refreshHistory() {
     try {
@@ -63,35 +73,36 @@ export function MissionConsole() {
   }
 
   async function execute(event: FormEvent) {
-    event.preventDefault(); if (!intent.trim() || running) return;
-    setEvents([]); setMissionDetail(null); setRunning(true); setPreviewRevision(0); setTaskId("");
+    event.preventDefault(); if (!intent.trim() || busy) return;
+    setEvents([]); setMissionDetail(null); setLifecycle(beginMissionConsoleOperation("executing")); setPreviewRevision(0); setTaskId("");
     try { await consumeMissionStream(await fetch("/api/missions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ intent }) })); }
-    catch (error) { clientFailure(error instanceof Error ? error.message : "Unknown error"); }
-    finally { setRunning(false); await refreshHistory(); }
+    catch (error) { const detail = error instanceof Error ? error.message : "Unknown error"; setLifecycle(failMissionConsoleOperation(detail)); clientFailure(detail); }
+    finally { setLifecycle((current) => current.failure ? current : completeMissionConsoleOperation()); await refreshHistory(); }
   }
 
   async function restore(event: FormEvent) {
-    event.preventDefault(); const requestedTaskId = restoreId.trim(); if (!requestedTaskId || running) return;
-    setRunning(true); setPreviewRevision(0);
+    event.preventDefault(); const requestedTaskId = restoreId.trim(); if (!requestedTaskId || busy) return;
+    setLifecycle(beginMissionConsoleOperation("restoring")); setPreviewRevision(0);
     try { await loadMission(requestedTaskId); }
-    catch (error) { setEvents([]); setMissionDetail(null); clientFailure(error instanceof Error ? error.message : "Unknown restore error"); }
-    finally { setRunning(false); }
+    catch (error) { const detail = error instanceof Error ? error.message : "Unknown restore error"; setEvents([]); setMissionDetail(null); setLifecycle(failMissionConsoleOperation(detail)); clientFailure(detail); }
+    finally { setLifecycle((current) => current.failure ? current : completeMissionConsoleOperation()); }
   }
 
   async function resume() {
-    const requestedTaskId = restoreId.trim(); if (!requestedTaskId || running || !view.canResume) return;
-    setRunning(true); setPreviewRevision(0);
+    const requestedTaskId = restoreId.trim(); if (!requestedTaskId || busy || !view.canResume) return;
+    setLifecycle(beginMissionConsoleOperation("resuming")); setPreviewRevision(0);
     try {
       const detail = await loadMission(requestedTaskId);
       if (!detail.effectiveResume.resumable) throw new Error(detail.effectiveResume.reason);
       await consumeMissionStream(await fetch("/api/missions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ resumeTaskId: requestedTaskId }) }));
-    } catch (error) { clientFailure(error instanceof Error ? error.message : "Unknown resume error"); }
-    finally { setRunning(false); await refreshHistory(); }
+    } catch (error) { const detail = error instanceof Error ? error.message : "Unknown resume error"; setLifecycle(failMissionConsoleOperation(detail)); clientFailure(detail); }
+    finally { setLifecycle((current) => current.failure ? current : completeMissionConsoleOperation()); await refreshHistory(); }
   }
 
   return <div className="missionConsole">
-    <form className="prompt" onSubmit={execute}><span>›</span><input aria-label="Prompt" value={intent} onChange={(event) => setIntent(event.target.value)} placeholder="Diga ao Monstro o que construir..."/><button disabled={running}>{running ? "RUNNING" : "EXECUTE"}</button></form>
-    <form className="prompt historyPrompt" onSubmit={restore}><span>↺</span><select aria-label="Mission history" value={restoreId} onChange={(event) => { setRestoreId(event.target.value); setMissionDetail(null); }}><option value="">{historyError ? historyError : history.length ? "Selecione uma missão persistida..." : "Nenhuma missão persistida"}</option>{history.map((mission) => <option key={mission.taskId} value={mission.taskId}>{formatMissionHistoryLabel(mission)}</option>)}</select><button type="button" disabled={running} onClick={() => void refreshHistory()}>REFRESH</button><button disabled={running || !restoreId.trim()}>RESTORE</button><button type="button" disabled={running || !view.canResume} title={view.resumeReason} onClick={() => void resume()}>{view.canResume ? view.resumeLabel : "RESUME"}</button></form>
+    <form className="prompt" onSubmit={execute}><span>›</span><input aria-label="Prompt" value={intent} onChange={(event) => setIntent(event.target.value)} placeholder="Diga ao Monstro o que construir..."/><button disabled={busy}>{lifecycle.operation === "executing" ? operationLabel : "EXECUTE"}</button></form>
+    <form className="prompt historyPrompt" onSubmit={restore}><span>↺</span><select aria-label="Mission history" value={restoreId} onChange={(event) => { setRestoreId(event.target.value); setMissionDetail(null); }}><option value="">{historyError ? historyError : history.length ? "Selecione uma missão persistida..." : "Nenhuma missão persistida"}</option>{history.map((mission) => <option key={mission.taskId} value={mission.taskId}>{formatMissionHistoryLabel(mission)}</option>)}</select><button type="button" disabled={busy} onClick={() => void refreshHistory()}>REFRESH</button><button disabled={busy || !restoreId.trim()}>{lifecycle.operation === "restoring" ? operationLabel : "RESTORE"}</button><button type="button" disabled={busy || !view.canResume} title={view.resumeReason} onClick={() => void resume()}>{lifecycle.operation === "resuming" ? operationLabel : view.canResume ? view.resumeLabel : "RESUME"}</button></form>
+    {lifecycle.failure ? <div className="missionFeed"><div><b>CLIENT</b> {lifecycle.failure}</div></div> : null}
     {taskId ? <div className="missionFeed"><div><b>MISSION</b> {taskId}{missionDetail?.taskId === taskId ? ` · ${formatMissionResumeAction(missionDetail.effectiveResume)}` : ""}</div></div> : null}
     <div className="missionFeed">{events.slice(-4).map((event) => <div key={event.id}><b>{event.phase.toUpperCase()}</b> {event.type}{event.detail ? ` · ${event.detail}` : ""}</div>)}</div>
     <div className="pipeline livePipeline">{missionPipeline.map((phase, index) => <div key={phase} className={index < view.activeIndex ? "done" : index === view.activeIndex ? "running" : ""}><b>{String(index + 1).padStart(2,"0")}</b><span>{phase.toUpperCase()}</span></div>)}</div>
