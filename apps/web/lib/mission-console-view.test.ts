@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { MissionTransportEvent } from "@monstro/contracts";
+import type { MissionTransportEvent, TaskPhase } from "@monstro/contracts";
 import { deriveMissionConsoleView } from "./mission-console-view.ts";
 
-const event = (phase: string, data?: MissionTransportEvent["data"]): MissionTransportEvent => ({
+const event = (phase: TaskPhase, data?: MissionTransportEvent["data"]): MissionTransportEvent => ({
   id: `event-${phase}`,
   taskId: "task-1",
   type: phase === "build" ? "trace.updated" : "phase.changed",
