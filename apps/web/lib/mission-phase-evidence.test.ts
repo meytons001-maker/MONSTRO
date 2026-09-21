@@ -26,16 +26,17 @@ test("derives plan, build, evaluation and repair evidence from journal events", 
   assert.deepEqual(evidence.find((item) => item.phase === "repair")?.metrics, ["1 patch(es)"]);
 });
 
-test("derives explicit inspection and runtime evidence", () => {
+test("derives structured understanding, inspection and runtime evidence", () => {
   const events = [
-    event("1", "phase.changed", "understand", undefined, "Build an interactive preview"),
+    event("1", "understanding.completed", "understand", { profile: "interactive-web", artifact: "web-preview", interactivity: "interactive", experienceFidelity: "required", rationale: "Public reference requires observable experience fidelity", acceptanceCount: 2 }, "Public reference requires observable experience fidelity"),
     event("2", "phase.changed", "inspect"),
     event("3", "inspection.completed", "inspect", { evidenceCount: 4, evidenceSources: ["project", "reference"], evidenceKinds: ["code", "visual"] }, "4 evidence item(s) inspected"),
     event("4", "phase.changed", "run"),
     event("5", "runtime.completed", "run", { ok: true, durationMs: 37, previewUrl: "http://127.0.0.1:3000" }, "runtime completed in 37ms"),
   ];
   const evidence = deriveMissionPhaseEvidence(events);
-  assert.equal(evidence.find((item) => item.phase === "understand")?.summary, "Build an interactive preview");
+  assert.equal(evidence.find((item) => item.phase === "understand")?.summary, "Public reference requires observable experience fidelity");
+  assert.deepEqual(evidence.find((item) => item.phase === "understand")?.metrics, ["interactive-web", "interactive", "2 acceptance", "fidelity required"]);
   assert.equal(evidence.find((item) => item.phase === "inspect")?.summary, "4 evidence item(s) inspected");
   assert.deepEqual(evidence.find((item) => item.phase === "inspect")?.metrics, ["4 evidence", "2 source(s)", "2 kind(s)"]);
   assert.equal(evidence.find((item) => item.phase === "run")?.summary, "runtime completed in 37ms");
