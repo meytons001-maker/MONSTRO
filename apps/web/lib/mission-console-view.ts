@@ -3,17 +3,14 @@ import type { MissionDetail } from "./mission-detail";
 import { formatMissionResumeAction } from "./mission-detail";
 import { deriveMissionFeed, type MissionFeedItem } from "./mission-feed";
 import type { MissionHistoryItem } from "./mission-history";
-import type { MissionExecutionState, MissionPipelinePhase } from "./mission-pipeline";
+import { deriveMissionOperationalView, type MissionOperationalView } from "./mission-operational-view";
 import { deriveMissionPipelineView, type MissionPipelineItem } from "./mission-pipeline-view";
 import type { MissionPhaseEvidence } from "./mission-phase-evidence";
 import { replayMissionSnapshot, type MissionReplaySnapshot } from "./mission-replay-snapshot";
 import { deriveMissionTraceSummary, type MissionTraceSummary } from "./mission-trace-summary";
 
-export type { MissionExecutionState, MissionPipelinePhase } from "./mission-pipeline";
-
 export type MissionConsoleView = {
-  activePhase?: MissionPipelinePhase;
-  executionState: MissionExecutionState;
+  operational: MissionOperationalView;
   pipeline: MissionPipelineItem[];
   previewUrl?: string;
   evidence: MissionPhaseEvidence[];
@@ -46,8 +43,7 @@ export function deriveMissionConsoleView(input: {
   const resumeLabel = selectedResume ? formatMissionResumeAction(selectedResume) : selectedMission ? formatMissionResumeAction(selectedMission) : "READ ONLY";
 
   return {
-    activePhase: snapshot.activePhase,
-    executionState: snapshot.executionState,
+    operational: deriveMissionOperationalView(snapshot.activePhase, snapshot.executionState),
     pipeline: deriveMissionPipelineView(snapshot.activePhase, snapshot.executionState),
     previewUrl: snapshot.previewUrl,
     evidence: snapshot.evidence,
