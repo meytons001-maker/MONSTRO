@@ -5,7 +5,7 @@ import type { MissionConsoleView } from "./mission-console-view.ts";
 import type { MissionExecutionState, MissionPipelinePhase } from "./mission-pipeline.ts";
 
 function view(state: MissionExecutionState, phase?: MissionPipelinePhase): MissionConsoleView {
-  return { operational: { state, phase, label: [state.toUpperCase(), phase?.toUpperCase()].filter(Boolean).join(" · ") }, pipeline: [], evidence: [], feed: [], resumeLabel: "READ ONLY", canResume: false };
+  return { operational: { state, phase, label: [state.toUpperCase(), phase?.toUpperCase()].filter(Boolean).join(" · ") }, pipeline: [], preview: { available: false, label: "WAITING FOR BUILD" }, evidence: [], feed: [], resumeLabel: "READ ONLY", canResume: false };
 }
 
 test("idle transport presents journal execution state and phase", () => {

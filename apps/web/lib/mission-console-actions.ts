@@ -23,6 +23,6 @@ export function deriveMissionConsoleActions({ intent, restoreId, status, view }:
     canRefreshHistory: !busy,
     canRestore: !busy && restoreId.trim().length > 0,
     canResume: !busy && restoreId.trim().length > 0 && view.canResume,
-    canRefreshPreview: !busy && Boolean(view.previewUrl),
+    canRefreshPreview: !busy && view.preview.available,
   };
 }

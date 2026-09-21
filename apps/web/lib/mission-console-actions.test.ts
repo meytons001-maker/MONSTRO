@@ -15,6 +15,7 @@ const status = (operation: MissionConsoleStatus["operation"] = "idle"): MissionC
 const view = (overrides: Partial<MissionConsoleView> = {}): MissionConsoleView => ({
   operational: { state: "idle", phase: undefined, label: "IDLE" },
   pipeline: [],
+  preview: { available: false, label: "WAITING FOR BUILD" },
   evidence: [],
   feed: [],
   resumeLabel: "READ ONLY",
@@ -23,12 +24,12 @@ const view = (overrides: Partial<MissionConsoleView> = {}): MissionConsoleView =
 });
 
 test("idle cockpit enables actions only when their prerequisites exist", () => {
-  const actions = deriveMissionConsoleActions({ intent: " build ", restoreId: "mission-1", status: status(), view: view({ canResume: true, previewUrl: "/preview" }) });
+  const actions = deriveMissionConsoleActions({ intent: " build ", restoreId: "mission-1", status: status(), view: view({ canResume: true, preview: { available: true, url: "/preview", label: "MISSION PREVIEW" } }) });
   assert.deepEqual(actions, { canExecute: true, canRefreshHistory: true, canRestore: true, canResume: true, canRefreshPreview: true });
 });
 
 test("active transport operation locks conflicting cockpit actions", () => {
-  const actions = deriveMissionConsoleActions({ intent: "build", restoreId: "mission-1", status: status("resuming"), view: view({ canResume: true, previewUrl: "/preview" }) });
+  const actions = deriveMissionConsoleActions({ intent: "build", restoreId: "mission-1", status: status("resuming"), view: view({ canResume: true, preview: { available: true, url: "/preview", label: "MISSION PREVIEW" } }) });
   assert.deepEqual(actions, { canExecute: false, canRefreshHistory: false, canRestore: false, canResume: false, canRefreshPreview: false });
 });
 
