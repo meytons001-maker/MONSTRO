@@ -2,9 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { deriveMissionConsoleStatus } from "./mission-console-status.ts";
 import type { MissionConsoleView } from "./mission-console-view.ts";
+import type { MissionExecutionState, MissionPipelinePhase } from "./mission-pipeline.ts";
 
-function view(executionState: MissionConsoleView["executionState"], activePhase?: MissionConsoleView["activePhase"]): MissionConsoleView {
-  return { activePhase, executionState, pipeline: [], evidence: [], feed: [], resumeLabel: "READ ONLY", canResume: false };
+function view(state: MissionExecutionState, phase?: MissionPipelinePhase): MissionConsoleView {
+  return { operational: { state, phase, label: [state.toUpperCase(), phase?.toUpperCase()].filter(Boolean).join(" · ") }, pipeline: [], evidence: [], feed: [], resumeLabel: "READ ONLY", canResume: false };
 }
 
 test("idle transport presents journal execution state and phase", () => {
