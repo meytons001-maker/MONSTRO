@@ -15,7 +15,7 @@ test("derives operational state, pipeline, preview and history resume state", ()
   assert.deepEqual(view.pipeline.slice(0, 5).map(({ phase, status }) => [phase, status]), [["understand", "done"], ["inspect", "done"], ["plan", "done"], ["build", "running"], ["run", "pending"]]);
   assert.deepEqual(view.preview, { available: true, url: "/preview/task-1", label: "MISSION PREVIEW" });
   assert.equal(view.resumeLabel, "RESUME RUN"); assert.equal(view.canResume, true);
-  assert.equal(Object.hasOwn(view, "activePhase"), false); assert.equal(Object.hasOwn(view, "executionState"), false); assert.equal(Object.hasOwn(view, "activeIndex"), false); assert.equal(Object.hasOwn(view, "progress"), false);
+  assert.equal(Object.hasOwn(view, "activePhase"), false); assert.equal(Object.hasOwn(view, "executionState"), false); assert.equal(Object.hasOwn(view, "activeIndex"), false); assert.equal(Object.hasOwn(view, "progress"), false); assert.equal(Object.hasOwn(view, "previewUrl"), false);
   assert.deepEqual(view.trace?.metrics.map(({ label, value }) => ({ label, value })), [{ label: "BUILD", value: "0" }, { label: "EVALUATE", value: "—" }, { label: "REPAIR", value: "0" }, { label: "REQUIREMENTS", value: "0" }]);
 });
 
