@@ -23,6 +23,14 @@ function requirementIds(patches: FilePatch[]): string[] {
   return [...new Set(patches.flatMap((patch) => patch.requirementIds ?? []))];
 }
 
+function inspectionData(evidence: Evidence[]) {
+  return {
+    evidenceCount: evidence.length,
+    evidenceSources: [...new Set(evidence.map((item) => item.source))],
+    evidenceKinds: [...new Set(evidence.map((item) => item.kind))],
+  };
+}
+
 export class MonstroOrchestrator {
   readonly journal: MissionJournal;
   constructor(private readonly services: MonstroServices, journal = new MissionJournal()) { this.journal = journal; }
@@ -91,6 +99,7 @@ export class MonstroOrchestrator {
     try {
       await this.phase(task, "inspect");
       const initialEvidence = await this.services.inspector.inspect(task);
+      await this.journal.record(task, "inspection.completed", `${initialEvidence.length} evidence item(s) inspected`, inspectionData(initialEvidence));
       await this.phase(task, "plan", `${initialEvidence.length} evidence item(s)`);
       const plan = await this.services.architect.plan(task, initialEvidence);
       await this.phase(task, "build", `${plan.steps.length} planned step(s)`);
