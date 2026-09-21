@@ -4,11 +4,11 @@ import { deriveMissionTraceSummary, type MissionProgress } from "./mission-trace
 
 const progress: MissionProgress = {
   build: [
-    { path: "src/app.ts", requirementIds: ["req-1", "req-2"] },
-    { path: "src/view.ts", requirementIds: ["req-2"] },
+    { path: "src/app.ts", operation: "create", requirementIds: ["req-1", "req-2"] },
+    { path: "src/view.ts", operation: "update", requirementIds: ["req-2"] },
   ],
-  repairs: [{ path: "src/view.ts" }],
-  evaluations: [{ score: 0.82, accepted: false, requirementIds: ["req-2", "req-3"], findingCodes: ["contrast", "layout"] }],
+  repairs: [{ path: "src/view.ts", operation: "update", requirementIds: ["req-2"] }],
+  evaluations: [{ iteration: 1, score: 0.82, accepted: false, requirementIds: ["req-2", "req-3"], findingCodes: ["contrast", "layout"], repairActionIds: ["repair-1"] }],
 };
 
 test("projects build, evaluation, repair and requirement trace metrics", () => {
