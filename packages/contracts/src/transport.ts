@@ -1,8 +1,11 @@
 import type { MissionPatchProgress, MissionTraceProgress, MissionTransportEvent } from "./index.js";
 
 const phases = new Set(["understand", "inspect", "plan", "build", "run", "observe", "evaluate", "repair", "deliver", "failed"]);
-const eventTypes = new Set(["phase.changed", "iteration.started", "inspection.completed", "runtime.completed", "observation.completed", "build.applied", "repair.completed", "trace.updated", "mission.resumed", "mission.completed", "mission.failed"]);
+const eventTypes = new Set(["phase.changed", "iteration.started", "understanding.completed", "inspection.completed", "runtime.completed", "observation.completed", "build.applied", "repair.completed", "trace.updated", "mission.resumed", "mission.completed", "mission.failed"]);
 const operations = new Set(["create", "update", "delete"]);
+const profiles = new Set(["web", "interactive-web"]);
+const interactivities = new Set(["structural", "interactive"]);
+const fidelities = new Set(["advisory", "required"]);
 
 function record(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -28,6 +31,17 @@ function progress(value: unknown): value is MissionTraceProgress {
     && strings(item.repairActionIds));
 }
 
+function understanding(value: unknown): boolean {
+  return record(value)
+    && profiles.has(String(value.profile))
+    && value.artifact === "web-preview"
+    && interactivities.has(String(value.interactivity))
+    && fidelities.has(String(value.experienceFidelity))
+    && typeof value.rationale === "string"
+    && Number.isInteger(value.acceptanceCount)
+    && Number(value.acceptanceCount) >= 0;
+}
+
 export function parseMissionTransportEvent(line: string): MissionTransportEvent {
   let value: unknown;
   try { value = JSON.parse(line); } catch { throw new Error("Invalid mission transport JSON"); }
@@ -42,6 +56,7 @@ export function parseMissionTransportEvent(line: string): MissionTransportEvent 
   if (value.detail !== undefined && typeof value.detail !== "string") throw new Error("Invalid mission transport detail");
   if (value.data !== undefined) {
     if (!record(value.data)) throw new Error("Invalid mission transport data");
+    if (value.type === "understanding.completed" && !understanding(value.data)) throw new Error("Invalid mission understanding");
     if (value.data.previewUrl !== undefined && typeof value.data.previewUrl !== "string") throw new Error("Invalid mission preview URL");
     if (value.data.artifacts !== undefined && !strings(value.data.artifacts)) throw new Error("Invalid mission artifacts");
     if (value.data.completedAt !== undefined && (typeof value.data.completedAt !== "string" || Number.isNaN(Date.parse(value.data.completedAt)))) throw new Error("Invalid mission completion timestamp");
@@ -49,6 +64,8 @@ export function parseMissionTransportEvent(line: string): MissionTransportEvent 
     if (value.data.evidenceSources !== undefined && !strings(value.data.evidenceSources)) throw new Error("Invalid mission evidence sources");
     if (value.data.evidenceKinds !== undefined && !strings(value.data.evidenceKinds)) throw new Error("Invalid mission evidence kinds");
     if (value.data.progress !== undefined && !progress(value.data.progress)) throw new Error("Invalid mission trace progress");
+  } else if (value.type === "understanding.completed") {
+    throw new Error("Invalid mission understanding");
   }
   return value as unknown as MissionTransportEvent;
 }
