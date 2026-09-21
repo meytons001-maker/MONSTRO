@@ -26,15 +26,31 @@ test("derives plan, build, evaluation and repair evidence from journal events", 
   assert.deepEqual(evidence.find((item) => item.phase === "repair")?.metrics, ["1 patch(es)"]);
 });
 
+test("derives structured inspect and runtime evidence", () => {
+  const events = [
+    event("1", "phase.changed", "understand", undefined, "Build an interactive preview"),
+    event("2", "phase.changed", "inspect"),
+    event("3", "phase.changed", "plan", undefined, "4 evidence item(s)"),
+    event("4", "phase.changed", "run"),
+    event("5", "runtime.completed", "run", { ok: true, durationMs: 37, previewUrl: "http://127.0.0.1:3000" }, "runtime completed in 37ms"),
+  ];
+  const evidence = deriveMissionPhaseEvidence(events);
+  assert.equal(evidence.find((item) => item.phase === "understand")?.summary, "Build an interactive preview");
+  assert.deepEqual(evidence.find((item) => item.phase === "inspect")?.metrics, ["4 evidence item(s)"]);
+  assert.equal(evidence.find((item) => item.phase === "run")?.summary, "runtime completed in 37ms");
+  assert.deepEqual(evidence.find((item) => item.phase === "run")?.metrics, ["ok", "37ms", "preview ready"]);
+});
+
 test("derives observation and delivery summaries", () => {
   const events = [
     event("1", "phase.changed", "observe"),
-    event("2", "observation.completed", "observe", { evidenceCount: 3 }, "3 evidence item(s) observed"),
+    event("2", "observation.completed", "observe", { evidenceCount: 3, durationMs: 12 }, "3 evidence item(s) observed"),
     event("3", "phase.changed", "deliver"),
     event("4", "mission.completed", "deliver", { artifacts: ["index.html", "preview.png"] }, "Mission delivered"),
   ];
   const evidence = deriveMissionPhaseEvidence(events);
   assert.equal(evidence.find((item) => item.phase === "observe")?.summary, "3 evidence item(s) observed");
+  assert.deepEqual(evidence.find((item) => item.phase === "observe")?.metrics, ["3 evidence", "12ms"]);
   assert.equal(evidence.find((item) => item.phase === "deliver")?.summary, "Mission delivered");
   assert.deepEqual(evidence.find((item) => item.phase === "deliver")?.metrics, ["2 artifact(s)"]);
 });
