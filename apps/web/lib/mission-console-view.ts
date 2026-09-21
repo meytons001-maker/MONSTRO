@@ -14,7 +14,6 @@ export type MissionConsoleView = {
   operational: MissionOperationalView;
   pipeline: MissionPipelineItem[];
   preview: MissionPreviewView;
-  previewUrl?: string;
   evidence: MissionPhaseEvidence[];
   feed: MissionFeedItem[];
   trace?: MissionTraceSummary;
@@ -48,7 +47,6 @@ export function deriveMissionConsoleView(input: {
     operational: deriveMissionOperationalView(snapshot.activePhase, snapshot.executionState),
     pipeline: deriveMissionPipelineView(snapshot.activePhase, snapshot.executionState),
     preview: deriveMissionPreviewView(snapshot.previewUrl),
-    previewUrl: snapshot.previewUrl,
     evidence: snapshot.evidence,
     feed: deriveMissionFeed(input.events),
     trace: deriveMissionTraceSummary(snapshot.progress),
