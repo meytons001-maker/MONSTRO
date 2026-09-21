@@ -1,6 +1,7 @@
 import { join } from "node:path";
-import { FileMissionJournalStore, MissionJournal, planMissionResume, replayMissionTraceProgress } from "@monstro/core";
+import { FileMissionJournalStore, MissionJournal, planMissionResume } from "@monstro/core";
 import { resolveEffectiveMissionResume } from "./mission-resume-decision";
+import { replayMissionSnapshot } from "./mission-replay-snapshot";
 
 const DEFAULT_DIRECTORY = join(process.cwd(), ".monstro", "missions");
 
@@ -14,18 +15,20 @@ export async function loadPersistedMission(taskId: string) {
   const store = createMissionJournalStore();
   const journal = await MissionJournal.replay(taskId, store);
   const events = journal.snapshot();
+  const snapshot = replayMissionSnapshot(events);
   const resume = planMissionResume(events);
   return {
     taskId,
     events,
-    progress: replayMissionTraceProgress(events),
+    snapshot,
+    progress: snapshot.progress,
     resume: {
       resumable: resume.resumable,
       restartPhase: resume.restartPhase ?? null,
       reason: resume.reason,
       task: resume.task ?? null,
     },
-    lastEvent: events.at(-1) ?? null,
+    lastEvent: snapshot.lastEvent,
   };
 }
 
@@ -39,11 +42,12 @@ export async function listPersistedMissions() {
 
     return {
       taskId,
-      phase: mission.lastEvent?.phase ?? firstEvent?.phase ?? null,
+      phase: mission.snapshot.activePhase ?? firstEvent?.phase ?? null,
       status: mission.lastEvent?.type ?? null,
+      executionState: mission.snapshot.executionState,
       updatedAt: mission.lastEvent?.timestamp ?? firstEvent?.timestamp ?? null,
-      eventCount: mission.events.length,
-      progress: mission.progress,
+      eventCount: mission.snapshot.eventCount,
+      progress: mission.snapshot.progress,
       resumable: resume.resumable,
       restartPhase: resume.restartPhase,
       resumeReason: resume.reason,
