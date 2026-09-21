@@ -26,17 +26,18 @@ test("derives plan, build, evaluation and repair evidence from journal events", 
   assert.deepEqual(evidence.find((item) => item.phase === "repair")?.metrics, ["1 patch(es)"]);
 });
 
-test("derives structured inspect and runtime evidence", () => {
+test("derives explicit inspection and runtime evidence", () => {
   const events = [
     event("1", "phase.changed", "understand", undefined, "Build an interactive preview"),
     event("2", "phase.changed", "inspect"),
-    event("3", "phase.changed", "plan", undefined, "4 evidence item(s)"),
+    event("3", "inspection.completed", "inspect", { evidenceCount: 4, evidenceSources: ["project", "reference"], evidenceKinds: ["code", "visual"] }, "4 evidence item(s) inspected"),
     event("4", "phase.changed", "run"),
     event("5", "runtime.completed", "run", { ok: true, durationMs: 37, previewUrl: "http://127.0.0.1:3000" }, "runtime completed in 37ms"),
   ];
   const evidence = deriveMissionPhaseEvidence(events);
   assert.equal(evidence.find((item) => item.phase === "understand")?.summary, "Build an interactive preview");
-  assert.deepEqual(evidence.find((item) => item.phase === "inspect")?.metrics, ["4 evidence item(s)"]);
+  assert.equal(evidence.find((item) => item.phase === "inspect")?.summary, "4 evidence item(s) inspected");
+  assert.deepEqual(evidence.find((item) => item.phase === "inspect")?.metrics, ["4 evidence", "2 source(s)", "2 kind(s)"]);
   assert.equal(evidence.find((item) => item.phase === "run")?.summary, "runtime completed in 37ms");
   assert.deepEqual(evidence.find((item) => item.phase === "run")?.metrics, ["ok", "37ms", "preview ready"]);
 });
