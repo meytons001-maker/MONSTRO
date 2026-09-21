@@ -14,7 +14,7 @@ function record(value: unknown): UnknownRecord | undefined {
   return value && typeof value === "object" ? value as UnknownRecord : undefined;
 }
 
-function buildPlan(events: MissionTransportEvent[]): BuildPlan | undefined {
+function buildPlan(events: readonly MissionTransportEvent[]): BuildPlan | undefined {
   const event = [...events].reverse().find((candidate) => candidate.type === "build.applied");
   const plan = record(event?.data)?.plan;
   const candidate = record(plan);
@@ -22,11 +22,11 @@ function buildPlan(events: MissionTransportEvent[]): BuildPlan | undefined {
   return plan as BuildPlan;
 }
 
-function latestTrace(events: MissionTransportEvent[]) {
+function latestTrace(events: readonly MissionTransportEvent[]) {
   return [...events].reverse().find((event) => event.type === "trace.updated" && event.data?.progress)?.data?.progress;
 }
 
-function latest(events: MissionTransportEvent[], type: MissionTransportEvent["type"]) {
+function latest(events: readonly MissionTransportEvent[], type: MissionTransportEvent["type"]) {
   return [...events].reverse().find((event) => event.type === type);
 }
 
@@ -34,7 +34,7 @@ function stringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
 
-export function deriveMissionPhaseEvidence(events: MissionTransportEvent[]): MissionPhaseEvidence[] {
+export function deriveMissionPhaseEvidence(events: readonly MissionTransportEvent[]): MissionPhaseEvidence[] {
   const current = events.at(-1);
   const activeIndex = current ? missionPipeline.indexOf(current.phase as MissionPipelinePhase) : -1;
   const plan = buildPlan(events);
