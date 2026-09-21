@@ -14,8 +14,8 @@ test("derives operational state, pipeline, preview and history resume state", ()
   assert.deepEqual(view.operational, { state: "running", phase: "build", label: "RUNNING · BUILD" });
   assert.deepEqual(view.pipeline.slice(0, 5).map(({ phase, status }) => [phase, status]), [["understand", "done"], ["inspect", "done"], ["plan", "done"], ["build", "running"], ["run", "pending"]]);
   assert.deepEqual(view.preview, { available: true, url: "/preview/task-1", label: "MISSION PREVIEW" });
-  assert.equal(view.resumeLabel, "RESUME RUN"); assert.equal(view.canResume, true);
-  assert.equal(Object.hasOwn(view, "activePhase"), false); assert.equal(Object.hasOwn(view, "executionState"), false); assert.equal(Object.hasOwn(view, "activeIndex"), false); assert.equal(Object.hasOwn(view, "progress"), false); assert.equal(Object.hasOwn(view, "previewUrl"), false);
+  assert.deepEqual(view.resume, { available: true, label: "RESUME RUN", reason: "confirmed build checkpoint" });
+  assert.equal(Object.hasOwn(view, "activePhase"), false); assert.equal(Object.hasOwn(view, "executionState"), false); assert.equal(Object.hasOwn(view, "activeIndex"), false); assert.equal(Object.hasOwn(view, "progress"), false); assert.equal(Object.hasOwn(view, "previewUrl"), false); assert.equal(Object.hasOwn(view, "resumeLabel"), false); assert.equal(Object.hasOwn(view, "resumeReason"), false); assert.equal(Object.hasOwn(view, "canResume"), false);
   assert.deepEqual(view.trace?.metrics.map(({ label, value }) => ({ label, value })), [{ label: "BUILD", value: "0" }, { label: "EVALUATE", value: "—" }, { label: "REPAIR", value: "0" }, { label: "REQUIREMENTS", value: "0" }]);
 });
 
@@ -29,7 +29,7 @@ test("derives completed and failed terminal operational states", () => {
 test("effective detail and matching server snapshot override stale history", () => {
   const events = [event("build", { previewUrl: "/preview/restored" })]; const snapshot = replayMissionSnapshot(events);
   const view = deriveMissionConsoleView({ events, history, restoreId: "task-1", missionDetail: { taskId: "task-1", events, snapshot, effectiveResume: { resumable: true, restartPhase: "inspect", reason: "workspace missing", degraded: true } } });
-  assert.equal(view.resumeLabel, "REBUILD FROM INSPECT"); assert.equal(view.resumeReason, "workspace missing"); assert.equal(view.canResume, true); assert.equal(view.preview.url, "/preview/restored"); assert.equal(view.operational.phase, "build");
+  assert.deepEqual(view.resume, { available: true, label: "REBUILD FROM INSPECT", reason: "workspace missing" }); assert.equal(view.preview.url, "/preview/restored"); assert.equal(view.operational.phase, "build");
 });
 
 test("falls back to replaying live events after a restored snapshot becomes stale", () => {
@@ -40,6 +40,6 @@ test("falls back to replaying live events after a restored snapshot becomes stal
 
 test("unselected cockpit is idle and read only", () => {
   const view = deriveMissionConsoleView({ events: [], history, restoreId: "", missionDetail: null });
-  assert.deepEqual(view.operational, { state: "idle", phase: undefined, label: "IDLE" }); assert.deepEqual(view.preview, { available: false, label: "WAITING FOR BUILD" });
-  assert.ok(view.pipeline.every((item) => item.status === "pending")); assert.equal(view.resumeLabel, "READ ONLY"); assert.equal(view.canResume, false); assert.equal(view.trace, undefined);
+  assert.deepEqual(view.operational, { state: "idle", phase: undefined, label: "IDLE" }); assert.deepEqual(view.preview, { available: false, label: "WAITING FOR BUILD" }); assert.deepEqual(view.resume, { available: false, label: "READ ONLY" });
+  assert.ok(view.pipeline.every((item) => item.status === "pending")); assert.equal(view.trace, undefined);
 });
