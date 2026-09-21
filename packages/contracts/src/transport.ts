@@ -1,7 +1,7 @@
 import type { MissionPatchProgress, MissionTraceProgress, MissionTransportEvent } from "./index.js";
 
 const phases = new Set(["understand", "inspect", "plan", "build", "run", "observe", "evaluate", "repair", "deliver", "failed"]);
-const eventTypes = new Set(["phase.changed", "iteration.started", "runtime.completed", "observation.completed", "build.applied", "repair.completed", "trace.updated", "mission.resumed", "mission.completed", "mission.failed"]);
+const eventTypes = new Set(["phase.changed", "iteration.started", "inspection.completed", "runtime.completed", "observation.completed", "build.applied", "repair.completed", "trace.updated", "mission.resumed", "mission.completed", "mission.failed"]);
 const operations = new Set(["create", "update", "delete"]);
 
 function record(value: unknown): value is Record<string, unknown> {
@@ -45,6 +45,9 @@ export function parseMissionTransportEvent(line: string): MissionTransportEvent 
     if (value.data.previewUrl !== undefined && typeof value.data.previewUrl !== "string") throw new Error("Invalid mission preview URL");
     if (value.data.artifacts !== undefined && !strings(value.data.artifacts)) throw new Error("Invalid mission artifacts");
     if (value.data.completedAt !== undefined && (typeof value.data.completedAt !== "string" || Number.isNaN(Date.parse(value.data.completedAt)))) throw new Error("Invalid mission completion timestamp");
+    if (value.data.evidenceCount !== undefined && (!Number.isInteger(value.data.evidenceCount) || Number(value.data.evidenceCount) < 0)) throw new Error("Invalid mission evidence count");
+    if (value.data.evidenceSources !== undefined && !strings(value.data.evidenceSources)) throw new Error("Invalid mission evidence sources");
+    if (value.data.evidenceKinds !== undefined && !strings(value.data.evidenceKinds)) throw new Error("Invalid mission evidence kinds");
     if (value.data.progress !== undefined && !progress(value.data.progress)) throw new Error("Invalid mission trace progress");
   }
   return value as unknown as MissionTransportEvent;
