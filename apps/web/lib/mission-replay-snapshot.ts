@@ -1,5 +1,5 @@
 import type { MissionTransportEvent } from "@monstro/contracts";
-import { missionPipeline, type MissionExecutionState, type MissionPipelinePhase } from "./mission-console-view";
+import { missionPipeline, type MissionExecutionState, type MissionPipelinePhase } from "./mission-pipeline";
 import { deriveMissionPhaseEvidence, type MissionPhaseEvidence } from "./mission-phase-evidence";
 
 export type MissionReplaySnapshot = {
