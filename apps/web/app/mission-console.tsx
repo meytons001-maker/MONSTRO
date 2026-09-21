@@ -23,7 +23,7 @@ export function MissionConsole() {
   const view = deriveMissionConsoleView({ events, history, restoreId, missionDetail });
   const status = deriveMissionConsoleStatus(lifecycle, view);
   const actions = deriveMissionConsoleActions({ intent, restoreId, status, view });
-  const previewSrc = view.previewUrl ? `${view.previewUrl}${view.previewUrl.includes("?") ? "&" : "?"}rev=${previewRevision}` : undefined;
+  const previewSrc = view.preview.url ? `${view.preview.url}${view.preview.url.includes("?") ? "&" : "?"}rev=${previewRevision}` : undefined;
   const operationLabel = missionConsoleOperationLabel(lifecycle);
 
   async function refreshHistory() {
@@ -104,6 +104,6 @@ export function MissionConsole() {
     <div className="pipeline livePipeline">{view.pipeline.map((item) => <div key={item.phase} className={item.status === "pending" ? "" : item.status}><b>{String(item.ordinal).padStart(2,"0")}</b><span>{item.phase.toUpperCase()}</span></div>)}</div>
     <section className="phaseEvidence" aria-label="Mission phase evidence">{view.evidence.map((item) => <article key={item.phase} className={item.status}><header><b>{item.phase.toUpperCase()}</b><span>{item.status.toUpperCase()}</span></header><p>{item.summary}</p>{item.metrics.length ? <footer>{item.metrics.map((metric) => <span key={metric}>{metric}</span>)}</footer> : null}</article>)}</section>
     {view.trace ? <section className="traceProgress" aria-label="Mission trace progress">{view.trace.metrics.map((metric) => <div key={metric.key}><b>{metric.label}</b><strong>{metric.value}</strong><span>{metric.detail}</span></div>)}</section> : null}
-    <section className="livePreviewStage" aria-label="Live preview"><div className="previewToolbar"><span><i className={view.previewUrl ? "online" : ""} /> {view.previewUrl ? "MISSION PREVIEW" : "WAITING FOR BUILD"}</span><div><button type="button" disabled={!actions.canRefreshPreview} onClick={() => setPreviewRevision((value) => value + 1)}>REFRESH</button>{view.previewUrl ? <a href={view.previewUrl} target="_blank" rel="noreferrer">OPEN ↗</a> : null}</div></div>{previewSrc ? <iframe key={previewSrc} title="MONSTRO generated preview" src={previewSrc} sandbox="allow-scripts allow-forms allow-modals allow-popups" /> : <div className="previewEmpty"><div className="orb"><div className="core">M</div></div><h1>BUILD. RUN.<br/><em>OBSERVE. REPAIR.</em></h1><p>Execute, restaure ou retome uma missão para renderizar o artefato real aqui.</p></div>}</section>
+    <section className="livePreviewStage" aria-label="Live preview"><div className="previewToolbar"><span><i className={view.preview.available ? "online" : ""} /> {view.preview.label}</span><div><button type="button" disabled={!actions.canRefreshPreview} onClick={() => setPreviewRevision((value) => value + 1)}>REFRESH</button>{view.preview.url ? <a href={view.preview.url} target="_blank" rel="noreferrer">OPEN ↗</a> : null}</div></div>{previewSrc ? <iframe key={previewSrc} title="MONSTRO generated preview" src={previewSrc} sandbox="allow-scripts allow-forms allow-modals allow-popups" /> : <div className="previewEmpty"><div className="orb"><div className="core">M</div></div><h1>BUILD. RUN.<br/><em>OBSERVE. REPAIR.</em></h1><p>Execute, restaure ou retome uma missão para renderizar o artefato real aqui.</p></div>}</section>
   </div>;
 }
