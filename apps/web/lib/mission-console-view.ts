@@ -4,6 +4,7 @@ import { formatMissionResumeAction } from "./mission-detail";
 import { deriveMissionFeed, type MissionFeedItem } from "./mission-feed";
 import type { MissionHistoryItem } from "./mission-history";
 import { missionPipeline, type MissionExecutionState, type MissionPipelinePhase } from "./mission-pipeline";
+import { deriveMissionPipelineView, type MissionPipelineItem } from "./mission-pipeline-view";
 import type { MissionPhaseEvidence } from "./mission-phase-evidence";
 import { replayMissionSnapshot, type MissionReplaySnapshot } from "./mission-replay-snapshot";
 import { deriveMissionTraceSummary, type MissionTraceSummary } from "./mission-trace-summary";
@@ -15,6 +16,7 @@ export type MissionConsoleView = {
   activeIndex: number;
   activePhase?: MissionPipelinePhase;
   executionState: MissionExecutionState;
+  pipeline: MissionPipelineItem[];
   previewUrl?: string;
   evidence: MissionPhaseEvidence[];
   feed: MissionFeedItem[];
@@ -50,6 +52,7 @@ export function deriveMissionConsoleView(input: {
     activeIndex,
     activePhase: snapshot.activePhase,
     executionState: snapshot.executionState,
+    pipeline: deriveMissionPipelineView(snapshot.activePhase, snapshot.executionState),
     previewUrl: snapshot.previewUrl,
     evidence: snapshot.evidence,
     feed: deriveMissionFeed(input.events),

@@ -4,7 +4,7 @@ import { deriveMissionConsoleStatus } from "./mission-console-status.ts";
 import type { MissionConsoleView } from "./mission-console-view.ts";
 
 function view(executionState: MissionConsoleView["executionState"], activePhase?: MissionConsoleView["activePhase"]): MissionConsoleView {
-  return { activeIndex: activePhase ? 0 : -1, activePhase, executionState, evidence: [], feed: [], resumeLabel: "READ ONLY", canResume: false };
+  return { activeIndex: activePhase ? 0 : -1, activePhase, executionState, pipeline: [], evidence: [], feed: [], resumeLabel: "READ ONLY", canResume: false };
 }
 
 test("idle transport presents journal execution state and phase", () => {

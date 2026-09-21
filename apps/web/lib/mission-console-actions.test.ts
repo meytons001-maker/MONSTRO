@@ -15,6 +15,7 @@ const status = (operation: MissionConsoleStatus["operation"] = "idle"): MissionC
 const view = (overrides: Partial<MissionConsoleView> = {}): MissionConsoleView => ({
   activeIndex: -1,
   executionState: "idle",
+  pipeline: [],
   evidence: [],
   feed: [],
   resumeLabel: "READ ONLY",
