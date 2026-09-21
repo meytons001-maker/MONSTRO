@@ -1,5 +1,5 @@
 import type { BuildPlan, MissionTransportEvent } from "@monstro/contracts";
-import { missionPipeline, type MissionPipelinePhase } from "./mission-console-view";
+import { missionPipeline, type MissionPipelinePhase } from "./mission-pipeline";
 
 export type MissionPhaseEvidence = {
   phase: MissionPipelinePhase;
