@@ -8,6 +8,13 @@ test("parses and validates a mission transport event", () => {
   assert.deepEqual(parseMissionTransportEvent(JSON.stringify(event)), event);
 });
 
+test("accepts runtime evidence and resume lifecycle events", () => {
+  const runtime = { id: "event:2", taskId: "task:1", type: "runtime.completed", phase: "run", timestamp: "2026-09-18T22:00:01.000Z", data: { ok: true, durationMs: 37, previewUrl: "http://127.0.0.1:3000" } };
+  const resumed = { id: "event:3", taskId: "task:1", type: "mission.resumed", phase: "run", timestamp: "2026-09-18T22:00:02.000Z", data: { restartPhase: "run" } };
+  assert.deepEqual(parseMissionTransportEvent(JSON.stringify(runtime)), runtime);
+  assert.deepEqual(parseMissionTransportEvent(JSON.stringify(resumed)), resumed);
+});
+
 test("rejects malformed event and malformed trace progress", () => {
   assert.throws(() => parseMissionTransportEvent("not-json"), /Invalid mission transport JSON/);
   assert.throws(() => parseMissionTransportEvent(JSON.stringify({ ...event, phase: "root" })), /Invalid mission transport event/);
