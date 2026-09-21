@@ -16,25 +16,24 @@ const view = (overrides: Partial<MissionConsoleView> = {}): MissionConsoleView =
   operational: { state: "idle", phase: undefined, label: "IDLE" },
   pipeline: [],
   preview: { available: false, label: "WAITING FOR BUILD" },
+  resume: { available: false, label: "READ ONLY" },
   evidence: [],
   feed: [],
-  resumeLabel: "READ ONLY",
-  canResume: false,
   ...overrides,
 });
 
 test("idle cockpit enables actions only when their prerequisites exist", () => {
-  const actions = deriveMissionConsoleActions({ intent: " build ", restoreId: "mission-1", status: status(), view: view({ canResume: true, preview: { available: true, url: "/preview", label: "MISSION PREVIEW" } }) });
+  const actions = deriveMissionConsoleActions({ intent: " build ", restoreId: "mission-1", status: status(), view: view({ resume: { available: true, label: "RESUME RUN" }, preview: { available: true, url: "/preview", label: "MISSION PREVIEW" } }) });
   assert.deepEqual(actions, { canExecute: true, canRefreshHistory: true, canRestore: true, canResume: true, canRefreshPreview: true });
 });
 
 test("active transport operation locks conflicting cockpit actions", () => {
-  const actions = deriveMissionConsoleActions({ intent: "build", restoreId: "mission-1", status: status("resuming"), view: view({ canResume: true, preview: { available: true, url: "/preview", label: "MISSION PREVIEW" } }) });
+  const actions = deriveMissionConsoleActions({ intent: "build", restoreId: "mission-1", status: status("resuming"), view: view({ resume: { available: true, label: "RESUME RUN" }, preview: { available: true, url: "/preview", label: "MISSION PREVIEW" } }) });
   assert.deepEqual(actions, { canExecute: false, canRefreshHistory: false, canRestore: false, canResume: false, canRefreshPreview: false });
 });
 
 test("missing intent or mission selection disables dependent actions", () => {
-  const actions = deriveMissionConsoleActions({ intent: "   ", restoreId: "", status: status(), view: view({ canResume: true }) });
+  const actions = deriveMissionConsoleActions({ intent: "   ", restoreId: "", status: status(), view: view({ resume: { available: true, label: "RESUME RUN" } }) });
   assert.equal(actions.canExecute, false);
   assert.equal(actions.canRestore, false);
   assert.equal(actions.canResume, false);
