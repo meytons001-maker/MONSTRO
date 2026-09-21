@@ -4,6 +4,7 @@ import type { MissionJournalStore } from "./mission-store.js";
 export type MissionEventType =
   | "phase.changed"
   | "iteration.started"
+  | "runtime.completed"
   | "observation.completed"
   | "build.applied"
   | "trace.updated"
