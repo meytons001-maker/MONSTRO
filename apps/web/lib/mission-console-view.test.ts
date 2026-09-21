@@ -38,6 +38,12 @@ test("derives pipeline, execution state, preview and history resume state", () =
   assert.equal(view.resumeLabel, "RESUME RUN");
   assert.equal(view.canResume, true);
   assert.ok(view.progress);
+  assert.deepEqual(view.trace?.metrics.map(({ label, value }) => ({ label, value })), [
+    { label: "BUILD", value: "0" },
+    { label: "EVALUATE", value: "—" },
+    { label: "REPAIR", value: "0" },
+    { label: "REQUIREMENTS", value: "0" },
+  ]);
 });
 
 test("derives completed and failed terminal execution states", () => {
@@ -87,4 +93,5 @@ test("unselected cockpit is idle and read only", () => {
   assert.equal(view.executionState, "idle");
   assert.equal(view.resumeLabel, "READ ONLY");
   assert.equal(view.canResume, false);
+  assert.equal(view.trace, undefined);
 });
