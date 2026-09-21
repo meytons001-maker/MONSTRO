@@ -5,8 +5,8 @@ import type { MissionConsoleView } from "./mission-console-view";
 export type MissionConsoleStatus = {
   label: string;
   operation: MissionConsoleLifecycle["operation"];
-  executionState: MissionConsoleView["executionState"];
-  phase: MissionConsoleView["activePhase"];
+  executionState: MissionConsoleView["operational"]["state"];
+  phase: MissionConsoleView["operational"]["phase"];
   failure: string | null;
 };
 
@@ -15,14 +15,14 @@ export function deriveMissionConsoleStatus(
   view: MissionConsoleView,
 ): MissionConsoleStatus {
   const operationLabel = missionConsoleOperationLabel(lifecycle);
-  const missionLabel = [view.executionState.toUpperCase(), view.activePhase?.toUpperCase()].filter(Boolean).join(" · ");
+  const missionLabel = view.operational.label;
   const label = lifecycle.operation === "idle" ? missionLabel : `${operationLabel} · ${missionLabel || "WAITING"}`;
 
   return {
     label,
     operation: lifecycle.operation,
-    executionState: view.executionState,
-    phase: view.activePhase,
+    executionState: view.operational.state,
+    phase: view.operational.phase,
     failure: lifecycle.failure,
   };
 }
