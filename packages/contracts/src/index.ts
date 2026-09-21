@@ -32,6 +32,6 @@ export interface Delivery { taskId: string; completedAt: string; summary: string
 export interface MissionPatchProgress { path: string; operation: FilePatch["operation"]; requirementIds: string[]; }
 export interface MissionEvaluationProgress { iteration: number; accepted: boolean; score: number; requirementIds: string[]; findingCodes: string[]; repairActionIds: string[]; }
 export interface MissionTraceProgress { build: MissionPatchProgress[]; repairs: MissionPatchProgress[]; evaluations: MissionEvaluationProgress[]; }
-export type MissionEventType = "phase.changed" | "iteration.started" | "runtime.completed" | "observation.completed" | "build.applied" | "repair.completed" | "trace.updated" | "mission.resumed" | "mission.completed" | "mission.failed";
+export type MissionEventType = "phase.changed" | "iteration.started" | "inspection.completed" | "runtime.completed" | "observation.completed" | "build.applied" | "repair.completed" | "trace.updated" | "mission.resumed" | "mission.completed" | "mission.failed";
 export interface MissionTransportEvent { id: string; taskId: string; type: MissionEventType; phase: TaskPhase; timestamp: string; detail?: string; data?: { previewUrl?: string; artifacts?: string[]; completedAt?: string; progress?: MissionTraceProgress; [key: string]: unknown }; }
 export { MissionNdjsonParser, parseMissionTransportEvent } from "./transport.ts";
