@@ -34,24 +34,32 @@ function phaseChange(events: MissionTransportEvent[], phase: MissionPipelinePhas
   return [...events].reverse().find((event) => event.type === "phase.changed" && event.phase === phase);
 }
 
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
 export function deriveMissionPhaseEvidence(events: MissionTransportEvent[]): MissionPhaseEvidence[] {
   const current = events.at(-1);
   const activeIndex = current ? missionPipeline.indexOf(current.phase as MissionPipelinePhase) : -1;
   const plan = buildPlan(events);
   const progress = latestTrace(events);
+  const inspection = latest(events, "inspection.completed");
   const runtime = latest(events, "runtime.completed");
   const observation = latest(events, "observation.completed");
   const completed = latest(events, "mission.completed");
   const failure = latest(events, "mission.failed");
   const evaluation = progress?.evaluations.at(-1);
   const understand = phaseChange(events, "understand");
-  const planStart = phaseChange(events, "plan");
 
   return missionPipeline.map((phase, index) => {
     const reached = events.some((event) => event.phase === phase);
     const status: MissionPhaseEvidence["status"] = index === activeIndex ? "active" : reached ? "produced" : "waiting";
     if (phase === "understand") return { phase, status, summary: understand?.detail ?? (reached ? "Mission intent accepted and normalized." : "Waiting for mission intent."), metrics: [] };
-    if (phase === "inspect") return { phase, status, summary: planStart?.detail ? "Project inspection produced planning evidence." : reached ? "Project evidence inspected." : "Waiting for inspection.", metrics: planStart?.detail ? [planStart.detail] : [] };
+    if (phase === "inspect") {
+      const sources = stringArray(inspection?.data?.evidenceSources);
+      const kinds = stringArray(inspection?.data?.evidenceKinds);
+      return { phase, status, summary: inspection?.detail ?? (reached ? "Project evidence inspected." : "Waiting for inspection."), metrics: inspection?.data ? [`${String(inspection.data.evidenceCount ?? 0)} evidence`, `${sources.length} source(s)`, `${kinds.length} kind(s)`] : [] };
+    }
     if (phase === "plan") return { phase, status, summary: plan?.rationale ?? (reached ? "Build plan produced." : "Waiting for plan."), metrics: plan ? [`${plan.steps.length} step(s)`, `${plan.requirements.length} requirement(s)`] : [] };
     if (phase === "build") return { phase, status, summary: progress?.build.length ? "Build patches applied and traced." : reached ? "Build phase reached." : "Waiting for build.", metrics: progress ? [`${progress.build.length} patch(es)`] : [] };
     if (phase === "run") return { phase, status, summary: runtime?.detail ?? (reached ? "Runtime execution started." : "Waiting for runtime."), metrics: runtime?.data ? [`${runtime.data.ok === true ? "ok" : "failed"}`, `${String(runtime.data.durationMs ?? 0)}ms`, ...(runtime.data.previewUrl ? ["preview ready"] : [])] : [] };
