@@ -22,7 +22,7 @@ export function deriveMissionConsoleActions({ intent, restoreId, status, view }:
     canExecute: !busy && intent.trim().length > 0,
     canRefreshHistory: !busy,
     canRestore: !busy && restoreId.trim().length > 0,
-    canResume: !busy && restoreId.trim().length > 0 && view.canResume,
+    canResume: !busy && restoreId.trim().length > 0 && view.resume.available,
     canRefreshPreview: !busy && view.preview.available,
   };
 }
