@@ -31,12 +31,15 @@ test("derives pipeline, execution state, preview and history resume state", () =
     restoreId: "task-1",
     missionDetail: null,
   });
-  assert.equal(view.activeIndex, 3);
   assert.equal(view.activePhase, "build");
   assert.equal(view.executionState, "running");
+  assert.deepEqual(view.pipeline.slice(0, 5).map(({ phase, status }) => [phase, status]), [
+    ["understand", "done"], ["inspect", "done"], ["plan", "done"], ["build", "running"], ["run", "pending"],
+  ]);
   assert.equal(view.previewUrl, "/preview/task-1");
   assert.equal(view.resumeLabel, "RESUME RUN");
   assert.equal(view.canResume, true);
+  assert.equal(Object.hasOwn(view, "activeIndex"), false);
   assert.equal(Object.hasOwn(view, "progress"), false);
   assert.deepEqual(view.trace?.metrics.map(({ label, value }) => ({ label, value })), [
     { label: "BUILD", value: "0" },
@@ -52,13 +55,14 @@ test("derives completed and failed terminal execution states", () => {
   });
   assert.equal(completed.executionState, "completed");
   assert.equal(completed.activePhase, "deliver");
+  assert.ok(completed.pipeline.every((item) => item.status === "done"));
 
   const failed = deriveMissionConsoleView({
     events: [event("failed", undefined, "mission.failed")], history, restoreId: "task-1", missionDetail: null,
   });
   assert.equal(failed.executionState, "failed");
-  assert.equal(failed.activeIndex, -1);
   assert.equal(failed.activePhase, undefined);
+  assert.ok(failed.pipeline.every((item) => item.status === "pending"));
 });
 
 test("effective detail and matching server snapshot override stale history", () => {
@@ -88,9 +92,9 @@ test("falls back to replaying live events after a restored snapshot becomes stal
 
 test("unselected cockpit is idle and read only", () => {
   const view = deriveMissionConsoleView({ events: [], history, restoreId: "", missionDetail: null });
-  assert.equal(view.activeIndex, -1);
   assert.equal(view.activePhase, undefined);
   assert.equal(view.executionState, "idle");
+  assert.ok(view.pipeline.every((item) => item.status === "pending"));
   assert.equal(view.resumeLabel, "READ ONLY");
   assert.equal(view.canResume, false);
   assert.equal(view.trace, undefined);
