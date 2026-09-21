@@ -20,7 +20,7 @@ function executionState(lastEvent: MissionTransportEvent | undefined): MissionEx
   return "running";
 }
 
-export function replayMissionSnapshot(events: MissionTransportEvent[]): MissionReplaySnapshot {
+export function replayMissionSnapshot(events: readonly MissionTransportEvent[]): MissionReplaySnapshot {
   const lastEvent = events.at(-1);
   const activePhase = lastEvent && missionPipeline.includes(lastEvent.phase as MissionPipelinePhase)
     ? lastEvent.phase as MissionPipelinePhase
