@@ -1,7 +1,7 @@
 import type { MissionPatchProgress, MissionTraceProgress, MissionTransportEvent } from "./index.js";
 
 const phases = new Set(["understand", "inspect", "plan", "build", "run", "observe", "evaluate", "repair", "deliver", "failed"]);
-const eventTypes = new Set(["phase.changed", "iteration.started", "observation.completed", "build.applied", "repair.completed", "trace.updated", "mission.completed", "mission.failed"]);
+const eventTypes = new Set(["phase.changed", "iteration.started", "runtime.completed", "observation.completed", "build.applied", "repair.completed", "trace.updated", "mission.resumed", "mission.completed", "mission.failed"]);
 const operations = new Set(["create", "update", "delete"]);
 
 function record(value: unknown): value is Record<string, unknown> {
