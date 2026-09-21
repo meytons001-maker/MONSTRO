@@ -4,7 +4,7 @@ import { MissionNdjsonParser, type MissionTransportEvent } from "@monstro/contra
 import { FormEvent, useEffect, useState } from "react";
 import { formatMissionResumeAction, parseMissionDetailPayload, type MissionDetail } from "../lib/mission-detail";
 import { deriveMissionConsoleActions } from "../lib/mission-console-actions";
-import { deriveMissionConsoleView, missionPipeline } from "../lib/mission-console-view";
+import { deriveMissionConsoleView } from "../lib/mission-console-view";
 import { beginMissionConsoleOperation, completeMissionConsoleOperation, failMissionConsoleOperation, initialMissionConsoleLifecycle, missionConsoleOperationLabel } from "../lib/mission-console-lifecycle";
 import { deriveMissionConsoleStatus } from "../lib/mission-console-status";
 import { formatMissionHistoryLabel, parseMissionHistoryPayload, type MissionHistoryItem } from "../lib/mission-history";
@@ -101,7 +101,7 @@ export function MissionConsole() {
     {status.failure ? <div className="missionFeed"><div><b>CLIENT</b> {status.failure}</div></div> : null}
     {taskId ? <div className="missionFeed"><div><b>MISSION</b> {taskId} · {status.label}{missionDetail?.taskId === taskId ? ` · ${formatMissionResumeAction(missionDetail.effectiveResume)}` : ""}</div></div> : null}
     <div className="missionFeed">{view.feed.map((item) => <div key={item.id}><b>{item.phase}</b> {item.event}{item.detail ? ` · ${item.detail}` : ""}</div>)}</div>
-    <div className="pipeline livePipeline">{missionPipeline.map((phase, index) => <div key={phase} className={index < view.activeIndex ? "done" : index === view.activeIndex ? "running" : ""}><b>{String(index + 1).padStart(2,"0")}</b><span>{phase.toUpperCase()}</span></div>)}</div>
+    <div className="pipeline livePipeline">{view.pipeline.map((item) => <div key={item.phase} className={item.status === "pending" ? "" : item.status}><b>{String(item.ordinal).padStart(2,"0")}</b><span>{item.phase.toUpperCase()}</span></div>)}</div>
     <section className="phaseEvidence" aria-label="Mission phase evidence">{view.evidence.map((item) => <article key={item.phase} className={item.status}><header><b>{item.phase.toUpperCase()}</b><span>{item.status.toUpperCase()}</span></header><p>{item.summary}</p>{item.metrics.length ? <footer>{item.metrics.map((metric) => <span key={metric}>{metric}</span>)}</footer> : null}</article>)}</section>
     {view.trace ? <section className="traceProgress" aria-label="Mission trace progress">{view.trace.metrics.map((metric) => <div key={metric.key}><b>{metric.label}</b><strong>{metric.value}</strong><span>{metric.detail}</span></div>)}</section> : null}
     <section className="livePreviewStage" aria-label="Live preview"><div className="previewToolbar"><span><i className={view.previewUrl ? "online" : ""} /> {view.previewUrl ? "MISSION PREVIEW" : "WAITING FOR BUILD"}</span><div><button type="button" disabled={!actions.canRefreshPreview} onClick={() => setPreviewRevision((value) => value + 1)}>REFRESH</button>{view.previewUrl ? <a href={view.previewUrl} target="_blank" rel="noreferrer">OPEN ↗</a> : null}</div></div>{previewSrc ? <iframe key={previewSrc} title="MONSTRO generated preview" src={previewSrc} sandbox="allow-scripts allow-forms allow-modals allow-popups" /> : <div className="previewEmpty"><div className="orb"><div className="core">M</div></div><h1>BUILD. RUN.<br/><em>OBSERVE. REPAIR.</em></h1><p>Execute, restaure ou retome uma missão para renderizar o artefato real aqui.</p></div>}</section>
