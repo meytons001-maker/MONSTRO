@@ -57,7 +57,17 @@ export async function POST(request: Request) {
     journal,
     sink: store,
     execute: async () => {
-      await journal.record(task, "phase.changed", intent);
+      const understanding = task.context.understanding;
+      if (understanding) {
+        await journal.record(task, "understanding.completed", understanding.rationale, {
+          profile: understanding.profile,
+          artifact: understanding.artifact,
+          interactivity: understanding.interactivity,
+          experienceFidelity: understanding.experienceFidelity,
+          rationale: understanding.rationale,
+          acceptanceCount: understanding.acceptance.length,
+        });
+      }
       return orchestrator.execute(task);
     },
   });
