@@ -30,10 +30,6 @@ function latest(events: MissionTransportEvent[], type: MissionTransportEvent["ty
   return [...events].reverse().find((event) => event.type === type);
 }
 
-function phaseChange(events: MissionTransportEvent[], phase: MissionPipelinePhase) {
-  return [...events].reverse().find((event) => event.type === "phase.changed" && event.phase === phase);
-}
-
 function stringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
@@ -43,18 +39,26 @@ export function deriveMissionPhaseEvidence(events: MissionTransportEvent[]): Mis
   const activeIndex = current ? missionPipeline.indexOf(current.phase as MissionPipelinePhase) : -1;
   const plan = buildPlan(events);
   const progress = latestTrace(events);
+  const understanding = latest(events, "understanding.completed");
   const inspection = latest(events, "inspection.completed");
   const runtime = latest(events, "runtime.completed");
   const observation = latest(events, "observation.completed");
   const completed = latest(events, "mission.completed");
   const failure = latest(events, "mission.failed");
   const evaluation = progress?.evaluations.at(-1);
-  const understand = phaseChange(events, "understand");
 
   return missionPipeline.map((phase, index) => {
     const reached = events.some((event) => event.phase === phase);
     const status: MissionPhaseEvidence["status"] = index === activeIndex ? "active" : reached ? "produced" : "waiting";
-    if (phase === "understand") return { phase, status, summary: understand?.detail ?? (reached ? "Mission intent accepted and normalized." : "Waiting for mission intent."), metrics: [] };
+    if (phase === "understand") {
+      const data = understanding?.data;
+      return {
+        phase,
+        status,
+        summary: understanding?.detail ?? (reached ? "Mission intent accepted and normalized." : "Waiting for mission intent."),
+        metrics: data ? [String(data.profile), String(data.interactivity), `${String(data.acceptanceCount ?? 0)} acceptance`, `fidelity ${String(data.experienceFidelity)}`] : [],
+      };
+    }
     if (phase === "inspect") {
       const sources = stringArray(inspection?.data?.evidenceSources);
       const kinds = stringArray(inspection?.data?.evidenceKinds);
