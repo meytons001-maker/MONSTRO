@@ -1,6 +1,7 @@
 import type { MissionTransportEvent } from "@monstro/contracts";
 import type { MissionDetail } from "./mission-detail";
 import { formatMissionResumeAction } from "./mission-detail";
+import { deriveMissionFeed, type MissionFeedItem } from "./mission-feed";
 import type { MissionHistoryItem } from "./mission-history";
 import { missionPipeline, type MissionExecutionState, type MissionPipelinePhase } from "./mission-pipeline";
 import type { MissionPhaseEvidence } from "./mission-phase-evidence";
@@ -16,6 +17,7 @@ export type MissionConsoleView = {
   previewUrl?: string;
   progress?: NonNullable<MissionTransportEvent["data"]>["progress"];
   evidence: MissionPhaseEvidence[];
+  feed: MissionFeedItem[];
   selectedMission?: MissionHistoryItem;
   resumeLabel: string;
   resumeReason?: string;
@@ -50,6 +52,7 @@ export function deriveMissionConsoleView(input: {
     previewUrl: snapshot.previewUrl,
     progress: snapshot.progress,
     evidence: snapshot.evidence,
+    feed: deriveMissionFeed(input.events),
     selectedMission,
     resumeLabel,
     resumeReason: selectedResume?.reason ?? selectedMission?.resumeReason,

@@ -16,6 +16,7 @@ const view = (overrides: Partial<MissionConsoleView> = {}): MissionConsoleView =
   activeIndex: -1,
   executionState: "idle",
   evidence: [],
+  feed: [],
   resumeLabel: "READ ONLY",
   canResume: false,
   ...overrides,
