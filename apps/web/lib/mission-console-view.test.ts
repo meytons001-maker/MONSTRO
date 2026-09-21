@@ -37,7 +37,7 @@ test("derives pipeline, execution state, preview and history resume state", () =
   assert.equal(view.previewUrl, "/preview/task-1");
   assert.equal(view.resumeLabel, "RESUME RUN");
   assert.equal(view.canResume, true);
-  assert.ok(view.progress);
+  assert.equal(Object.hasOwn(view, "progress"), false);
   assert.deepEqual(view.trace?.metrics.map(({ label, value }) => ({ label, value })), [
     { label: "BUILD", value: "0" },
     { label: "EVALUATE", value: "—" },

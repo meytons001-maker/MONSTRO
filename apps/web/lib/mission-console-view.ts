@@ -16,7 +16,6 @@ export type MissionConsoleView = {
   activePhase?: MissionPipelinePhase;
   executionState: MissionExecutionState;
   previewUrl?: string;
-  progress?: NonNullable<MissionTransportEvent["data"]>["progress"];
   evidence: MissionPhaseEvidence[];
   feed: MissionFeedItem[];
   trace?: MissionTraceSummary;
@@ -52,7 +51,6 @@ export function deriveMissionConsoleView(input: {
     activePhase: snapshot.activePhase,
     executionState: snapshot.executionState,
     previewUrl: snapshot.previewUrl,
-    progress: snapshot.progress,
     evidence: snapshot.evidence,
     feed: deriveMissionFeed(input.events),
     trace: deriveMissionTraceSummary(snapshot.progress),
