@@ -6,6 +6,7 @@ import type { MissionHistoryItem } from "./mission-history";
 import { missionPipeline, type MissionExecutionState, type MissionPipelinePhase } from "./mission-pipeline";
 import type { MissionPhaseEvidence } from "./mission-phase-evidence";
 import { replayMissionSnapshot, type MissionReplaySnapshot } from "./mission-replay-snapshot";
+import { deriveMissionTraceSummary, type MissionTraceSummary } from "./mission-trace-summary";
 
 export { missionPipeline } from "./mission-pipeline";
 export type { MissionExecutionState, MissionPipelinePhase } from "./mission-pipeline";
@@ -18,6 +19,7 @@ export type MissionConsoleView = {
   progress?: NonNullable<MissionTransportEvent["data"]>["progress"];
   evidence: MissionPhaseEvidence[];
   feed: MissionFeedItem[];
+  trace?: MissionTraceSummary;
   selectedMission?: MissionHistoryItem;
   resumeLabel: string;
   resumeReason?: string;
@@ -53,6 +55,7 @@ export function deriveMissionConsoleView(input: {
     progress: snapshot.progress,
     evidence: snapshot.evidence,
     feed: deriveMissionFeed(input.events),
+    trace: deriveMissionTraceSummary(snapshot.progress),
     selectedMission,
     resumeLabel,
     resumeReason: selectedResume?.reason ?? selectedMission?.resumeReason,
