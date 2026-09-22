@@ -9,6 +9,14 @@
     "test": "node --test"
   },
   "dependencies": {
+    "@monstro/ai": "workspace:*",
+    "@monstro/browser": "workspace:*",
+    "@monstro/contracts": "workspace:*",
+    "@monstro/core": "workspace:*",
+    "@monstro/evaluator": "workspace:*",
+    "@monstro/inspector": "workspace:*",
+    "@monstro/observer": "workspace:*",
+    "@monstro/runtime": "workspace:*",
     "next": "^15.1.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
