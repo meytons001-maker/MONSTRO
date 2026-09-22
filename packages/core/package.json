@@ -4,7 +4,17 @@
   "private": true,
   "type": "module",
   "exports": "./src/index.ts",
-  "scripts": { "typecheck": "tsc --noEmit", "build": "tsc --noEmit", "test": "node --test" },
-  "dependencies": { "@monstro/contracts": "workspace:*" },
-  "devDependencies": { "typescript": "^5.7.2" }
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit",
+    "test": "tsx --test test/**/*.test.ts"
+  },
+  "dependencies": {
+    "@monstro/contracts": "workspace:*",
+    "@monstro/policy": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
 }
