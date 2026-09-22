@@ -1,5 +1,6 @@
 import type {
   BuildPlan,
+  Capability,
   Delivery,
   Evaluation,
   Evidence,
@@ -37,7 +38,18 @@ export interface Exporter {
   deliver(task: MonstroTask, runtime: RuntimeResult, evaluation: Evaluation): Promise<Delivery>;
 }
 
+export interface CapabilityAuthorization {
+  allowed: Capability[];
+  denied: Capability[];
+  reasons: string[];
+}
+
+export interface Authorizer {
+  authorize(task: MonstroTask): Promise<CapabilityAuthorization> | CapabilityAuthorization;
+}
+
 export interface MonstroServices {
+  authorizer: Authorizer;
   inspector: Inspector;
   architect: Architect;
   builder: Builder;
@@ -47,10 +59,28 @@ export interface MonstroServices {
   exporter: Exporter;
 }
 
+export class CapabilityDeniedError extends Error {
+  constructor(
+    readonly taskId: string,
+    readonly denied: Capability[],
+    readonly reasons: string[],
+  ) {
+    super(`MONSTRO denied capabilities for task ${taskId}: ${denied.join(", ")}`);
+    this.name = "CapabilityDeniedError";
+  }
+}
+
 export class MonstroOrchestrator {
   constructor(private readonly services: MonstroServices) {}
 
   async execute(task: MonstroTask): Promise<Delivery> {
+    task.phase = "understand";
+    const authorization = await this.services.authorizer.authorize(task);
+    if (authorization.denied.length > 0) {
+      task.phase = "failed";
+      throw new CapabilityDeniedError(task.id, authorization.denied, authorization.reasons);
+    }
+
     task.phase = "inspect";
     const evidence = await this.services.inspector.inspect(task);
 
