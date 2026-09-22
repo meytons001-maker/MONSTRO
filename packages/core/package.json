@@ -11,7 +11,8 @@
   },
   "dependencies": {
     "@monstro/contracts": "workspace:*",
-    "@monstro/policy": "workspace:*"
+    "@monstro/policy": "workspace:*",
+    "@monstro/runtime": "workspace:*"
   },
   "devDependencies": {
     "tsx": "^4.19.2",
