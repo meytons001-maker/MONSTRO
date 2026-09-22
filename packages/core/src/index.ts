@@ -8,6 +8,7 @@ export * from "./file-mission-store.ts";
 export * from "./trace.ts";
 export * from "./task-replay.ts";
 export * from "./capability-registry.ts";
+export * from "./mission-capability-resolver.ts";
 
 export interface Inspector { inspect(task: MonstroTask): Promise<Evidence[]>; }
 export interface Architect { plan(task: MonstroTask, evidence: Evidence[]): Promise<BuildPlan>; }
