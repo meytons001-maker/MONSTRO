@@ -31,8 +31,10 @@ jobs:
           node-version: 20
           cache: pnpm
 
+      # Bootstrap mode: the repository does not have a committed lockfile yet.
+      # Switch this to --frozen-lockfile as soon as pnpm-lock.yaml is committed.
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --no-frozen-lockfile
 
       - name: Typecheck
         run: pnpm typecheck
