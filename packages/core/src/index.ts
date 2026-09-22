@@ -9,34 +9,16 @@ import type {
   RuntimeResult,
 } from "@monstro/contracts";
 
-export interface Inspector {
-  inspect(task: MonstroTask): Promise<Evidence[]>;
-}
-
-export interface Architect {
-  plan(task: MonstroTask, evidence: Evidence[]): Promise<BuildPlan>;
-}
-
+export interface Inspector { inspect(task: MonstroTask): Promise<Evidence[]>; }
+export interface Architect { plan(task: MonstroTask, evidence: Evidence[]): Promise<BuildPlan>; }
 export interface Builder {
   build(task: MonstroTask, plan: BuildPlan): Promise<FilePatch[]>;
   apply(task: MonstroTask, patches: FilePatch[]): Promise<void>;
 }
-
-export interface Runtime {
-  run(task: MonstroTask): Promise<RuntimeResult>;
-}
-
-export interface Evaluator {
-  evaluate(task: MonstroTask, runtime: RuntimeResult): Promise<Evaluation>;
-}
-
-export interface Repairer {
-  repair(task: MonstroTask, evaluation: Evaluation): Promise<FilePatch[]>;
-}
-
-export interface Exporter {
-  deliver(task: MonstroTask, runtime: RuntimeResult, evaluation: Evaluation): Promise<Delivery>;
-}
+export interface Runtime { run(task: MonstroTask): Promise<RuntimeResult>; }
+export interface Evaluator { evaluate(task: MonstroTask, runtime: RuntimeResult): Promise<Evaluation>; }
+export interface Repairer { repair(task: MonstroTask, evaluation: Evaluation): Promise<FilePatch[]>; }
+export interface Exporter { deliver(task: MonstroTask, runtime: RuntimeResult, evaluation: Evaluation): Promise<Delivery>; }
 
 export interface CapabilityAuthorization {
   allowed: Capability[];
@@ -60,11 +42,7 @@ export interface MonstroServices {
 }
 
 export class CapabilityDeniedError extends Error {
-  constructor(
-    readonly taskId: string,
-    readonly denied: Capability[],
-    readonly reasons: string[],
-  ) {
+  constructor(readonly taskId: string, readonly denied: Capability[], readonly reasons: string[]) {
     super(`MONSTRO denied capabilities for task ${taskId}: ${denied.join(", ")}`);
     this.name = "CapabilityDeniedError";
   }
@@ -83,10 +61,8 @@ export class MonstroOrchestrator {
 
     task.phase = "inspect";
     const evidence = await this.services.inspector.inspect(task);
-
     task.phase = "plan";
     const plan = await this.services.architect.plan(task, evidence);
-
     task.phase = "build";
     await this.services.builder.apply(task, await this.services.builder.build(task, plan));
 
@@ -94,7 +70,6 @@ export class MonstroOrchestrator {
       task.iteration += 1;
       task.phase = "run";
       const runtime = await this.services.runtime.run(task);
-
       task.phase = "evaluate";
       const evaluation = await this.services.evaluator.evaluate(task, runtime);
 
@@ -113,3 +88,5 @@ export class MonstroOrchestrator {
     throw new Error(`MONSTRO could not satisfy task ${task.id} after ${task.iteration} iterations`);
   }
 }
+
+export { PolicyAuthorizer } from "./policy-authorizer.js";
