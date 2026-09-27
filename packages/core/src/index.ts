@@ -95,3 +95,6 @@ export type { LocalBuilderOptions, LocalExecutionAdapters, ProcessSpecFactory } 
 
 export { RuntimeEvidenceEvaluator } from "./runtime-evidence-evaluator.js";
 export type { RuntimeEvidenceEvaluatorOptions } from "./runtime-evidence-evaluator.js";
+
+export { RuleBasedRepairer } from "./rule-based-repairer.js";
+export type { EvaluationRepairRule } from "./rule-based-repairer.js";
