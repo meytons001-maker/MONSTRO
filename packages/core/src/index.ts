@@ -92,3 +92,6 @@ export class MonstroOrchestrator {
 export { PolicyAuthorizer } from "./policy-authorizer.js";
 export { WorkspaceBuilder, WorkspaceRuntime, createLocalExecutionAdapters } from "./local-adapters.js";
 export type { LocalBuilderOptions, LocalExecutionAdapters, ProcessSpecFactory } from "./local-adapters.js";
+
+export { RuntimeEvidenceEvaluator } from "./runtime-evidence-evaluator.js";
+export type { RuntimeEvidenceEvaluatorOptions } from "./runtime-evidence-evaluator.js";
