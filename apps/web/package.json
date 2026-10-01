@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "typecheck": "tsc --noEmit",
+    "pretest": "pnpm --filter @monstro/core build",
     "test": "tsx --test test/*.test.ts"
   },
   "dependencies": {
