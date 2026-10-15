@@ -2,6 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { MonstroTask } from "@monstro/contracts";
+import type { AlphaMissionResult } from "./alpha-mission-contract";
 import {
   MonstroOrchestrator,
   PolicyAuthorizer,
@@ -10,13 +11,7 @@ import {
   createLocalExecutionAdapters,
 } from "@monstro/core";
 
-export interface AlphaMissionResult {
-  taskId: string;
-  phase: MonstroTask["phase"];
-  iteration: number;
-  summary: string;
-  artifact: string;
-}
+export type { AlphaMissionResult } from "./alpha-mission-contract";
 
 export async function executeAlphaMission(intent: string): Promise<AlphaMissionResult> {
   const normalizedIntent = intent.trim();
