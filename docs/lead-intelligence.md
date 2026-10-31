@@ -36,3 +36,15 @@ Automação comercial permanece desativada na V1. Uma evolução segura deve usa
 ## Segmentação
 
 Os conjuntos de CNAE de XMenu e Cotare ficam em `packages/lead-intelligence/src/config.ts`. São filtros de potencial, não afirmações de compatibilidade, preço, comissão ou autorização comercial.
+
+## Commercial Intelligence Engine
+
+A rota `/commercial-intelligence` aceita comandos naturais e executa um recorte auditável da missão comercial. A API `POST /api/commercial-intelligence/missions` interpreta segmento e bairro, consulta exclusivamente o DuckDB cadastral, deduplica pelo CNPJ e devolve cobertura, dossiês, evidências, prioridade explicável, perguntas e um rascunho que exige aprovação humana.
+
+Exemplo:
+
+```json
+{"intent":"Pesquise restaurantes na Vila Laura, Salvador, Bahia.","limit":25}
+```
+
+O interpretador atual é determinístico e cobre os segmentos alimentícios configurados. Site oficial, redes empresariais, avaliações e geocodificação permanecem marcados como integrações não conectadas. O resultado vazio significa apenas ausência dentro da competência e cobertura importadas, nunca inexistência de empresas na região. MONSTRO não envia mensagens e não compartilha dados com o Divulgado nesta versão.

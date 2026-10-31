@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { dashboard, exportCsv, initializeDatabase, searchEstablishments } from "../src/index.js";
+import { dashboard, executeCommercialMission, exportCsv, initializeDatabase, interpretCommercialIntent, searchEstablishments } from "../src/index.js";
 import { withDatabase } from "../src/duckdb.js";
 
 async function fixture() {
@@ -51,5 +51,19 @@ test("exports only existing values without fabrication", async () => {
     const csv = await exportCsv(db, { active: true });
     assert.match(csv, /RESTAURANTE TESTE LTDA/);
     assert.doesNotMatch(csv, /87654321000100/);
+  } finally { await cleanup(); }
+});
+
+test("interprets a commercial mission and returns auditable dossiers", async () => {
+  const parsed = interpretCommercialIntent("Pesquise pizzarias na Pituba, Salvador, Bahia");
+  assert.deepEqual(parsed.cnaes, ["5611203"]);
+  assert.equal(parsed.neighborhood, "Pituba");
+  const { db, cleanup } = await fixture();
+  try {
+    const result = await executeCommercialMission(db, { intent: "Pesquise restaurantes na Barra, Salvador" });
+    assert.equal(result.dossiers.length, 1);
+    assert.equal(result.dossiers[0]?.evidence[0]?.classification, "confirmed_fact");
+    assert.match(result.dossiers[0]?.priority.meaning ?? "", /não probabilidade de compra/);
+    assert.ok(result.dossiers[0]?.missingIntegrations.includes("site oficial"));
   } finally { await cleanup(); }
 });

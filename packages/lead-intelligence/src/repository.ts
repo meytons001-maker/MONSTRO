@@ -17,7 +17,7 @@ function segmentPredicate(product?: ProductSegment) {
   return `e.primary_cnae IN (${SEGMENTS[product].map(sql).join(",")})`;
 }
 
-export interface SearchOptions { query?: string; product?: ProductSegment; active?: boolean; limit?: number; offset?: number; }
+export interface SearchOptions { query?: string; product?: ProductSegment; active?: boolean; neighborhood?: string; cnaes?: string[]; limit?: number; offset?: number; }
 
 export async function dashboard(databasePath: string) {
   return withDatabase(databasePath, async (connection) => {
@@ -39,13 +39,15 @@ export async function searchEstablishments(databasePath: string, options: Search
   const term = options.query?.replace(/\D/g, "") || options.query?.trim() || "";
   const search = term ? `AND (e.cnpj ILIKE ${sql(`%${term}%`)} OR c.legal_name ILIKE ${sql(`%${options.query?.trim()}%`)} OR e.trade_name ILIKE ${sql(`%${options.query?.trim()}%`)})` : "";
   const active = options.active === undefined ? "" : `AND e.registration_status = ${sql(options.active ? "02" : "08")}`;
+  const neighborhood = options.neighborhood ? `AND e.neighborhood ILIKE ${sql(`%${options.neighborhood.trim()}%`)}` : "";
+  const cnaes = options.cnaes?.length ? `AND e.primary_cnae IN (${options.cnaes.map(sql).join(",")})` : "";
   const limit = Math.min(500, Math.max(1, options.limit ?? 100));
   const offset = Math.max(0, options.offset ?? 0);
   return withDatabase(databasePath, async (connection) => (await rows(connection, `SELECT e.*, c.legal_name,
       CASE WHEN e.primary_cnae IN (${SEGMENTS.xmenu.map(sql).join(",")}) THEN true ELSE false END xmenu,
       CASE WHEN e.primary_cnae IN (${SEGMENTS.cotare.map(sql).join(",")}) THEN true ELSE false END cotare
     FROM establishments e LEFT JOIN companies c ON c.cnpj_root=e.cnpj_root
-    WHERE ${segmentPredicate(options.product)} ${search} ${active}
+    WHERE ${segmentPredicate(options.product)} ${search} ${active} ${neighborhood} ${cnaes}
     ORDER BY coalesce(c.legal_name,e.trade_name,e.cnpj) LIMIT ${limit} OFFSET ${offset}`)).map(numbers));
 }
 
