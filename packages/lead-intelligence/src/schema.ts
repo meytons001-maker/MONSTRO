@@ -11,4 +11,8 @@ CREATE TABLE IF NOT EXISTS interactions (id VARCHAR PRIMARY KEY, lead_id VARCHAR
 CREATE TABLE IF NOT EXISTS proposals (id VARCHAR PRIMARY KEY, opportunity_id VARCHAR NOT NULL, status VARCHAR NOT NULL, version INTEGER NOT NULL, document_url VARCHAR, approved_by VARCHAR, created_at TIMESTAMP NOT NULL);
 CREATE TABLE IF NOT EXISTS campaigns (id VARCHAR PRIMARY KEY, name VARCHAR NOT NULL, product VARCHAR NOT NULL, status VARCHAR NOT NULL DEFAULT 'draft', daily_limit INTEGER NOT NULL DEFAULT 0, requires_human_approval BOOLEAN NOT NULL DEFAULT true);
 CREATE TABLE IF NOT EXISTS compliance_preferences (cnpj VARCHAR PRIMARY KEY, consent_status VARCHAR NOT NULL DEFAULT 'unknown', objection_reason VARCHAR, opted_out_at TIMESTAMP, do_not_contact BOOLEAN NOT NULL DEFAULT false, source VARCHAR, updated_at TIMESTAMP NOT NULL DEFAULT current_timestamp);
+CREATE TABLE IF NOT EXISTS prospect_lists (id VARCHAR PRIMARY KEY, name VARCHAR NOT NULL, product VARCHAR, created_at TIMESTAMP NOT NULL DEFAULT current_timestamp, updated_at TIMESTAMP NOT NULL DEFAULT current_timestamp);
+CREATE TABLE IF NOT EXISTS prospect_list_items (list_id VARCHAR NOT NULL, cnpj VARCHAR NOT NULL, added_at TIMESTAMP NOT NULL DEFAULT current_timestamp, PRIMARY KEY (list_id, cnpj));
+CREATE TABLE IF NOT EXISTS prospect_list_history (id VARCHAR PRIMARY KEY, list_id VARCHAR NOT NULL, action VARCHAR NOT NULL, details JSON, occurred_at TIMESTAMP NOT NULL DEFAULT current_timestamp);
 `;
+

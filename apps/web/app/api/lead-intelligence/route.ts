@@ -1,20 +1,9 @@
-import { resolve } from "node:path";
-import { pathToFileURL } from "node:url";
 import { NextResponse } from "next/server";
 import type { ProductSegment } from "@monstro/lead-intelligence";
+import { databasePath, leadModule, publicError } from "./server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-function databasePath() {
-  return process.env.MONSTRO_LEAD_DB ?? resolve(process.cwd(), "../../data/lead-intelligence.duckdb");
-}
-
-async function leadModule() {
-  const moduleUrl = pathToFileURL(resolve(process.cwd(), "../../packages/lead-intelligence/dist/index.js")).href;
-  const runtimeImport = new Function("specifier", "return import(specifier)") as (specifier: string) => Promise<typeof import("@monstro/lead-intelligence")>;
-  return runtimeImport(moduleUrl);
-}
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -42,6 +31,7 @@ export async function GET(request: Request) {
     const results = await searchEstablishmentsPage(databasePath(), options);
     return NextResponse.json({ metrics, results });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Lead Intelligence unavailable." }, { status: 500 });
+    return NextResponse.json({ error: publicError(error) }, { status: 500 });
   }
 }
+

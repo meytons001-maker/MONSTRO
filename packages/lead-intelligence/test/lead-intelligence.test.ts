@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { dashboard, executeCommercialMission, exportCsv, initializeDatabase, interpretCommercialIntent, scoreCommercialRecord, searchEstablishments, searchEstablishmentsPage } from "../src/index.js";
+import { createProspectList, dashboard, executeCommercialMission, exportCsv, getEstablishmentDossier, getProspectList, initializeDatabase, interpretCommercialIntent, listProspectLists, scoreCommercialRecord, searchEstablishments, searchEstablishmentsPage } from "../src/index.js";
 import { withDatabase } from "../src/duckdb.js";
 
 async function fixture() {
@@ -16,6 +16,7 @@ async function fixture() {
       ('12345678000190','12345678','0001','90','1','SABOR TESTE','02','20261001','00','20200101','5611201',NULL,'RUA','MODELO','10',NULL,'BARRA','40100000','BA','3849','71999999999',NULL,'CONTATO@EXEMPLO.COM','2026-10','https://dados.cnpjaberto.com.br',current_timestamp),
       ('87654321000100','87654321','0001','00','1',NULL,'08','20261001','01','20190101','4711301',NULL,'AVENIDA','EXEMPLO','20',NULL,'CENTRO','40000000','BA','3849',NULL,NULL,NULL,'2026-10','https://dados.cnpjaberto.com.br',current_timestamp)`);
     await connection.run(`INSERT INTO import_runs VALUES ('run','2026-10','https://dados.cnpjaberto.com.br',DATE '2026-10-19',current_timestamp,'3849',false,'sample',2,2)`);
+    await connection.run(`INSERT INTO partners VALUES ('partner','12345678','2','MARIA TESTE',NULL,'49','20200101',NULL,NULL,NULL,NULL,NULL,'2026-10')`);
   });
   return { db, cleanup: () => rm(dir, { recursive: true, force: true }) };
 }
@@ -85,3 +86,26 @@ test("keeps completeness, product fit and engagement independent", () => {
   assert.ok(scores.completeness.score < scores.productFit.score);
   assert.match(scores.meaning, /engajamento/);
 });
+
+test("opens a dossier with published partners", async () => {
+  const { db, cleanup } = await fixture();
+  try {
+    const dossier = await getEstablishmentDossier(db, "12345678000190");
+    assert.equal(dossier?.establishment.legal_name, "RESTAURANTE TESTE LTDA");
+    assert.equal(dossier?.partners[0]?.partner_name, "MARIA TESTE");
+  } finally { await cleanup(); }
+});
+
+test("persists and reopens prospecting lists with history", async () => {
+  const { db, cleanup } = await fixture();
+  try {
+    const created = await createProspectList(db, { name: "Barra ativa", product: "xmenu", cnpjs: ["12345678000190"] });
+    assert.equal(created.companyCount, 1);
+    const summary = await listProspectLists(db);
+    assert.equal(summary[0]?.company_count, 1);
+    const reopened = await getProspectList(db, created.id);
+    assert.equal(reopened?.items.length, 1);
+    assert.equal(reopened?.history[0]?.action, "created");
+  } finally { await cleanup(); }
+});
+
