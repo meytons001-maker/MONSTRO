@@ -23,6 +23,12 @@ pnpm --filter @monstro/lead-intelligence import:salvador -- --db C:\dados\leads.
 
 # incluir situações inativas
 pnpm --filter @monstro/lead-intelligence import:salvador -- --db C:\dados\leads.duckdb --limit full --all-statuses
+
+# carga retomável a partir de shards previamente baixados
+pnpm --filter @monstro/lead-intelligence import:salvador -- --db C:\dados\leads.duckdb --source-dir C:\dados\cnpj-2026-10 --limit full --all-statuses
+
+# auditoria reproduzível da competência carregada
+pnpm --filter @monstro/lead-intelligence exec tsx src/cli.ts audit --db C:\dados\leads.duckdb
 ```
 
 O modo padrão substitui controladamente os estabelecimentos da mesma competência e município. `--no-relations` permite validar rapidamente somente estabelecimentos; sem essa opção, empresas e QSA são relacionados pela raiz de oito dígitos.
@@ -48,3 +54,22 @@ Exemplo:
 ```
 
 O interpretador atual é determinístico e cobre os segmentos alimentícios configurados. Site oficial, redes empresariais, avaliações e geocodificação permanecem marcados como integrações não conectadas. O resultado vazio significa apenas ausência dentro da competência e cobertura importadas, nunca inexistência de empresas na região. MONSTRO não envia mensagens e não compartilha dados com o Divulgado nesta versão.
+
+## Resultado da carga V1.1
+
+Execução `99724c44-8ee1-4837-86a5-116052d66133`, competência `2026-10`, cobertura `full`, todos os status cadastrais:
+
+- 1.025.921 estabelecimentos e CNPJs únicos; zero duplicações.
+- 334.590 ativos.
+- 869.393 com telefone publicado.
+- 778.898 com e-mail publicado.
+- 993.057 empresas relacionadas e 408.681 registros QSA deduplicados.
+- 30 arquivos Parquet validados, total de 4.848.183.310 bytes.
+
+A cobertura `full` significa todos os registros do município RFB `3849` presentes nos 10 shards de estabelecimentos da competência usada; não significa cobertura de fontes digitais ou garantia de atualidade fora dessa competência.
+
+## Busca e exportação
+
+`GET /api/lead-intelligence` aceita `q`, `product`, `neighborhood`, `active`, `hasPhone`, `hasEmail`, `page` e `pageSize` (máximo 250). A resposta contém `results.total`, `page`, `pages` e `items`. `format=csv` exporta os mesmos filtros, com limite explícito de 100.000 linhas no cabeçalho `x-monstro-export-limit`.
+
+Completude cadastral, adequação ao produto e engajamento comercial possuem scores separados. Engajamento começa em zero e só pode aumentar com interações comerciais persistidas. Os contratos versionados de integração são apenas tipos; nenhum transporte ou sincronização com o Divulgado está ativo.

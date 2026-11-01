@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { dashboard, executeCommercialMission, exportCsv, initializeDatabase, interpretCommercialIntent, searchEstablishments } from "../src/index.js";
+import { dashboard, executeCommercialMission, exportCsv, initializeDatabase, interpretCommercialIntent, scoreCommercialRecord, searchEstablishments, searchEstablishmentsPage } from "../src/index.js";
 import { withDatabase } from "../src/duckdb.js";
 
 async function fixture() {
@@ -63,7 +63,25 @@ test("interprets a commercial mission and returns auditable dossiers", async () 
     const result = await executeCommercialMission(db, { intent: "Pesquise restaurantes na Barra, Salvador" });
     assert.equal(result.dossiers.length, 1);
     assert.equal(result.dossiers[0]?.evidence[0]?.classification, "confirmed_fact");
-    assert.match(result.dossiers[0]?.priority.meaning ?? "", /não probabilidade de compra/);
+    assert.equal(result.dossiers[0]?.scores.engagement.score, 0);
+    assert.match(result.dossiers[0]?.scores.meaning ?? "", /engajamento/);
     assert.ok(result.dossiers[0]?.missingIntegrations.includes("site oficial"));
   } finally { await cleanup(); }
+});
+
+test("returns a filtered page with an independent total", async () => {
+  const { db, cleanup } = await fixture();
+  try {
+    const result = await searchEstablishmentsPage(db, { active: true, hasPhone: true, limit: 1, offset: 0 });
+    assert.equal(result.total, 1);
+    assert.equal(result.items.length, 1);
+    assert.equal(result.pages, 1);
+  } finally { await cleanup(); }
+});
+
+test("keeps completeness, product fit and engagement independent", () => {
+  const scores = scoreCommercialRecord({ registration_status: "02", primary_cnae: "5611201", phone_1: "71", email: null, xmenu: true }, ["5611201"]);
+  assert.equal(scores.engagement.score, 0);
+  assert.ok(scores.completeness.score < scores.productFit.score);
+  assert.match(scores.meaning, /engajamento/);
 });

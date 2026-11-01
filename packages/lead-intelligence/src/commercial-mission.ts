@@ -18,19 +18,30 @@ export function interpretCommercialIntent(intent: string) {
     cnaes: segment ? SEGMENT_CNAES[segment] : [],
     neighborhood: neighborhoodMatch?.[1]?.trim().replace(/\b\w/g, (letter) => letter.toUpperCase()) ?? null,
     activeOnly: !normalized.includes("inativa"),
+    segmentPrecision: segment && ["pizzaria", "pizzarias", "lanchonete", "lanchonetes", "cafeteria", "cafeterias", "hamburgueria", "hamburguerias"].includes(segment)
+      ? "CNAE 5611203 agrupa lanchonetes, casas de chá, sucos e similares; o subtipo exige fonte adicional"
+      : "CNAE cadastral principal",
   };
 }
 
-function priority(record: Record<string, unknown>) {
-  const reasons: string[] = [];
-  let score = 0;
-  if (record.registration_status === "02") { score += 25; reasons.push("situação cadastral ativa (+25)"); }
-  if (record.phone_1) { score += 15; reasons.push("telefone publicado (+15)"); }
-  if (record.email) { score += 15; reasons.push("e-mail publicado (+15)"); }
-  if (record.trade_name) { score += 10; reasons.push("nome fantasia disponível (+10)"); }
-  if (record.primary_cnae) { score += 20; reasons.push("CNAE compatível com a consulta (+20)"); }
-  if (record.neighborhood) { score += 10; reasons.push("bairro cadastral disponível (+10)"); }
-  return { score, reasons, meaning: "prioridade de investigação, não probabilidade de compra" };
+export function scoreCommercialRecord(record: Record<string, unknown>, targetCnaes: string[] = []) {
+  const completenessReasons: string[] = []; let completeness = 0;
+  if (record.phone_1 || record.phone_2) { completeness += 25; completenessReasons.push("telefone publicado (+25)"); }
+  if (record.email) { completeness += 25; completenessReasons.push("e-mail publicado (+25)"); }
+  if (record.trade_name) { completeness += 15; completenessReasons.push("nome fantasia (+15)"); }
+  if (record.neighborhood && record.street) { completeness += 20; completenessReasons.push("endereço e bairro (+20)"); }
+  if (record.primary_cnae) { completeness += 15; completenessReasons.push("CNAE principal (+15)"); }
+  const fitReasons: string[] = []; let productFit = 0;
+  if (record.registration_status === "02") { productFit += 20; fitReasons.push("cadastro ativo (+20)"); }
+  if (!targetCnaes.length || targetCnaes.includes(String(record.primary_cnae))) { productFit += 60; fitReasons.push("CNAE no filtro solicitado (+60)"); }
+  if (record.xmenu || record.cotare) { productFit += 20; fitReasons.push("segmentação de produto configurada (+20)"); }
+  return {
+    completeness: { score: completeness, reasons: completenessReasons },
+    productFit: { score: productFit, reasons: fitReasons },
+    engagement: { score: 0, reasons: ["nenhuma interação comercial registrada"] },
+    priority: Math.round(completeness * 0.35 + productFit * 0.45),
+    meaning: "prioridade de investigação; engajamento só aumenta após interações registradas",
+  };
 }
 
 export async function executeCommercialMission(databasePath: string, request: CommercialMissionRequest) {
@@ -44,7 +55,7 @@ export async function executeCommercialMission(databasePath: string, request: Co
   });
   const dossiers = records.map((record) => ({
     establishment: record,
-    priority: priority(record),
+    scores: scoreCommercialRecord(record, criteria.cnaes),
     evidence: [{ classification: "confirmed_fact", source: record.source_url, consultedAt: record.verified_at,
       statement: `Cadastro CNPJ ${record.cnpj}, situação ${record.registration_status}, CNAE ${record.primary_cnae}, bairro ${record.neighborhood ?? "não informado"}.` }],
     missingIntegrations: ["site oficial", "redes empresariais", "avaliações públicas", "geocodificação"],

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { resolve } from "node:path";
 import { ACTIVE_STATUS, DEFAULT_COMPETENCE, DEFAULT_DATASET, SALVADOR_RFB_CODE } from "./config.js";
 import { rows, sql, withDatabase } from "./duckdb.js";
 import { SCHEMA_SQL } from "./schema.js";
@@ -11,11 +12,14 @@ export interface ImportOptions {
   limit?: number | null;
   mode?: "replace-competence" | "upsert";
   includeRelations?: boolean;
+  sourceDirectory?: string;
 }
 
-function parquetUrls(dataset: string, table: "estabelecimentos" | "empresas" | "socios", parts = 10) {
+function parquetUrls(dataset: string, table: "estabelecimentos" | "empresas" | "socios", parts = 10, sourceDirectory?: string) {
   return Array.from({ length: parts }, (_, index) =>
-    `https://huggingface.co/datasets/${dataset}/resolve/main/${table}/${table}${index}.parquet`,
+    sourceDirectory
+      ? resolve(sourceDirectory, table, `${table}${index}.parquet`).replaceAll("\\", "/")
+      : `https://huggingface.co/datasets/${dataset}/resolve/main/${table}/${table}${index}.parquet`,
   );
 }
 
@@ -44,7 +48,7 @@ export async function importSalvador(options: ImportOptions) {
         cnae_fiscal_secundaria, tipo_logradouro, logradouro, numero, complemento, bairro, cep, uf,
         municipio, concat_ws('', ddd1, telefone1) AS phone_1,
         concat_ws('', ddd2, telefone2) AS phone_2, correio_eletronico
-      FROM read_parquet(${parquetList(parquetUrls(dataset, "estabelecimentos"))}, union_by_name=true)
+      FROM read_parquet(${parquetList(parquetUrls(dataset, "estabelecimentos", 10, options.sourceDirectory))}, union_by_name=true)
       WHERE municipio = ${sql(SALVADOR_RFB_CODE)} ${statusFilter} ${limitSql}`);
 
     await connection.run("BEGIN TRANSACTION");
@@ -66,17 +70,20 @@ export async function importSalvador(options: ImportOptions) {
           SELECT e.cnpj_basico, e.razao_social, e.natureza_juridica, e.qualificacao_responsavel,
             try_cast(replace(e.capital_social, ',', '.') AS DECIMAL(18,2)), e.porte_empresa,
             e.ente_federativo, ${sql(competence)}
-          FROM read_parquet(${parquetList(parquetUrls(dataset, "empresas"))}, union_by_name=true) e
+          FROM read_parquet(${parquetList(parquetUrls(dataset, "empresas", 10, options.sourceDirectory))}, union_by_name=true) e
           INNER JOIN roots r USING (cnpj_basico)`);
         await connection.run(`DELETE FROM partners WHERE source_competence = ${sql(competence)} AND cnpj_root IN (SELECT cnpj_basico FROM roots)`);
         await connection.run(`INSERT INTO partners
-          SELECT md5(concat_ws('|', s.cnpj_basico, s.identificador_socio, s.nome_socio,
+          SELECT DISTINCT md5(concat_ws('|', s.cnpj_basico, s.identificador_socio, s.nome_socio,
             s.cpf_cnpj_socio, s.qualificacao_socio, s.data_entrada_sociedade)),
             s.cnpj_basico, s.identificador_socio, s.nome_socio, s.cpf_cnpj_socio,
             s.qualificacao_socio, s.data_entrada_sociedade, s.pais, s.representante_legal,
             s.nome_representante, s.qualificacao_representante, s.faixa_etaria, ${sql(competence)}
-          FROM read_parquet(${parquetList(parquetUrls(dataset, "socios"))}, union_by_name=true) s
-          INNER JOIN roots r USING (cnpj_basico)`);
+          FROM read_parquet(${parquetList(parquetUrls(dataset, "socios", 10, options.sourceDirectory))}, union_by_name=true) s
+          INNER JOIN roots r USING (cnpj_basico)
+          QUALIFY row_number() OVER (PARTITION BY md5(concat_ws('|', s.cnpj_basico, s.identificador_socio,
+            s.nome_socio, s.cpf_cnpj_socio, s.qualificacao_socio, s.data_entrada_sociedade))
+            ORDER BY s.nome_socio, s.cpf_cnpj_socio) = 1`);
       }
 
       const count = Number((await rows(connection, "SELECT count(*) AS total FROM salvador_stage"))[0]?.total ?? 0);

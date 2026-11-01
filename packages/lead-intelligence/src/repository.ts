@@ -17,7 +17,19 @@ function segmentPredicate(product?: ProductSegment) {
   return `e.primary_cnae IN (${SEGMENTS[product].map(sql).join(",")})`;
 }
 
-export interface SearchOptions { query?: string; product?: ProductSegment; active?: boolean; neighborhood?: string; cnaes?: string[]; limit?: number; offset?: number; }
+export interface SearchOptions { query?: string; product?: ProductSegment; active?: boolean; neighborhood?: string; cnaes?: string[]; hasPhone?: boolean; hasEmail?: boolean; limit?: number; offset?: number; }
+
+function searchWhere(options: SearchOptions) {
+  const digits = options.query?.replace(/\D/g, "") ?? "";
+  const raw = options.query?.trim() ?? "";
+  const search = raw ? `AND (e.cnpj ILIKE ${sql(`%${digits || raw}%`)} OR c.legal_name ILIKE ${sql(`%${raw}%`)} OR e.trade_name ILIKE ${sql(`%${raw}%`)})` : "";
+  const active = options.active === undefined ? "" : `AND e.registration_status ${options.active ? "=" : "<>"} '02'`;
+  const neighborhood = options.neighborhood ? `AND e.neighborhood ILIKE ${sql(`%${options.neighborhood.trim()}%`)}` : "";
+  const cnaes = options.cnaes?.length ? `AND e.primary_cnae IN (${options.cnaes.map(sql).join(",")})` : "";
+  const phone = options.hasPhone ? "AND (e.phone_1 IS NOT NULL OR e.phone_2 IS NOT NULL)" : "";
+  const email = options.hasEmail ? "AND e.email IS NOT NULL" : "";
+  return `${segmentPredicate(options.product)} ${search} ${active} ${neighborhood} ${cnaes} ${phone} ${email}`;
+}
 
 export async function dashboard(databasePath: string) {
   return withDatabase(databasePath, async (connection) => {
@@ -36,23 +48,32 @@ export async function dashboard(databasePath: string) {
 }
 
 export async function searchEstablishments(databasePath: string, options: SearchOptions = {}) {
-  const term = options.query?.replace(/\D/g, "") || options.query?.trim() || "";
-  const search = term ? `AND (e.cnpj ILIKE ${sql(`%${term}%`)} OR c.legal_name ILIKE ${sql(`%${options.query?.trim()}%`)} OR e.trade_name ILIKE ${sql(`%${options.query?.trim()}%`)})` : "";
-  const active = options.active === undefined ? "" : `AND e.registration_status = ${sql(options.active ? "02" : "08")}`;
-  const neighborhood = options.neighborhood ? `AND e.neighborhood ILIKE ${sql(`%${options.neighborhood.trim()}%`)}` : "";
-  const cnaes = options.cnaes?.length ? `AND e.primary_cnae IN (${options.cnaes.map(sql).join(",")})` : "";
-  const limit = Math.min(500, Math.max(1, options.limit ?? 100));
+  const limit = Math.min(100_000, Math.max(1, options.limit ?? 100));
   const offset = Math.max(0, options.offset ?? 0);
   return withDatabase(databasePath, async (connection) => (await rows(connection, `SELECT e.*, c.legal_name,
       CASE WHEN e.primary_cnae IN (${SEGMENTS.xmenu.map(sql).join(",")}) THEN true ELSE false END xmenu,
       CASE WHEN e.primary_cnae IN (${SEGMENTS.cotare.map(sql).join(",")}) THEN true ELSE false END cotare
     FROM establishments e LEFT JOIN companies c ON c.cnpj_root=e.cnpj_root
-    WHERE ${segmentPredicate(options.product)} ${search} ${active} ${neighborhood} ${cnaes}
+    WHERE ${searchWhere(options)}
     ORDER BY coalesce(c.legal_name,e.trade_name,e.cnpj) LIMIT ${limit} OFFSET ${offset}`)).map(numbers));
 }
 
+export async function searchEstablishmentsPage(databasePath: string, options: SearchOptions = {}) {
+  const limit = Math.min(250, Math.max(1, options.limit ?? 50));
+  const offset = Math.max(0, options.offset ?? 0);
+  return withDatabase(databasePath, async (connection) => {
+    const total = Number((await rows(connection, `SELECT count(*) total FROM establishments e LEFT JOIN companies c ON c.cnpj_root=e.cnpj_root WHERE ${searchWhere(options)}`))[0]?.total ?? 0);
+    const items = (await rows(connection, `SELECT e.*, c.legal_name,
+      CASE WHEN e.primary_cnae IN (${SEGMENTS.xmenu.map(sql).join(",")}) THEN true ELSE false END xmenu,
+      CASE WHEN e.primary_cnae IN (${SEGMENTS.cotare.map(sql).join(",")}) THEN true ELSE false END cotare
+      FROM establishments e LEFT JOIN companies c ON c.cnpj_root=e.cnpj_root WHERE ${searchWhere(options)}
+      ORDER BY coalesce(c.legal_name,e.trade_name,e.cnpj) LIMIT ${limit} OFFSET ${offset}`)).map(numbers);
+    return { items, total, limit, offset, page: Math.floor(offset / limit) + 1, pages: Math.max(1, Math.ceil(total / limit)) };
+  });
+}
+
 export async function exportCsv(databasePath: string, options: SearchOptions = {}) {
-  const records = await searchEstablishments(databasePath, { ...options, limit: 500 });
+  const records = await searchEstablishments(databasePath, { ...options, limit: Math.min(100_000, options.limit ?? 100_000), offset: 0 });
   if (!records.length) return "cnpj,razao_social,nome_fantasia,cnae,bairro,telefone,email\n";
   const quote = (value: unknown) => `"${String(value ?? "").replaceAll('"', '""')}"`;
   return ["cnpj,razao_social,nome_fantasia,cnae,bairro,telefone,email", ...records.map((r) => [r.cnpj, r.legal_name, r.trade_name, r.primary_cnae, r.neighborhood, r.phone_1, r.email].map(quote).join(","))].join("\n");
