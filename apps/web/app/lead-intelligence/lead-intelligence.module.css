@@ -48,3 +48,48 @@
 @media(max-width:1100px){.tabs{display:flex;overflow:auto;scroll-snap-type:x proximity}.tabs button,.tabs a{min-width:170px;scroll-snap-align:start}}
 @media(max-width:700px){.shell{padding:12px 12px 70px}.hero{border-radius:22px}.heroContent{padding:28px 22px}.tabs{margin:-14px 8px 24px;padding:9px;border-radius:18px}.filters{grid-template-columns:1fr;padding:16px;border-radius:20px}.filters .wide{grid-column:auto}.actions{flex-wrap:wrap}.searchState,.resultBar{align-items:flex-start;flex-direction:column}.sectionHeading h2{font-size:29px}}
 
+/* DIVULGADO design system — shared geometry, depth and interaction states. */
+.shell {
+  --ink:#14372f; --muted:#637d76; --line:#d5e6e1; --surface:#fff; --soft:#f4fbf8;
+  --green:#0a9a7d; --green-strong:#08715f; --turquoise:#19b9ab; --focus:#20a98b;
+  background:radial-gradient(circle at 75% 8%,#dff7f0 0,transparent 30%),#f4f8f7;
+}
+.icon { width:18px; height:18px; flex:0 0 auto }
+.tabs button,.tabs a { grid-template-columns:36px 1fr; align-items:center; column-gap:10px }
+.tabs button>span:last-child,.tabs a>span:last-child { display:grid; gap:4px }
+.navIcon { display:grid; place-items:center; width:36px; height:36px; border:1px solid #d6eae4; border-radius:12px; background:#f7fcfa; color:#178b75; transition:transform .16s ease,background .16s ease }
+.tabs button:hover .navIcon,.tabs a:hover .navIcon,.tabs .activeTab .navIcon { transform:scale(1.04); background:#dff8f1; color:#05735f }
+.actionButton { appearance:none; min-height:44px; border:1px solid #bed8d1; border-radius:999px; padding:0 17px; background:#fff; color:var(--ink); font:750 13px/1 Inter,system-ui,sans-serif; cursor:pointer; box-shadow:0 6px 15px #164e4212,0 1px 2px #164e4218; transition:transform .15s ease,box-shadow .15s ease,background .15s ease,border-color .15s ease }
+.buttonContent { display:flex; align-items:center; justify-content:center; gap:8px }
+.actionButton:hover:not(:disabled) { transform:translateY(-2px); border-color:#80cbbb; box-shadow:0 11px 23px #0c725d22,0 2px 4px #164e4218 }
+.actionButton:active:not(:disabled) { transform:translateY(1px); box-shadow:0 3px 8px #164e4218 }
+.actionButton:disabled { opacity:.5; cursor:not-allowed; box-shadow:none }
+.actionButton:focus-visible,.tabs button:focus-visible,.tabs a:focus-visible,.export:focus-visible,.linkButton:focus-visible,.shell input:focus-visible,.shell select:focus-visible,.shell textarea:focus-visible { outline:3px solid color-mix(in srgb,var(--focus) 45%,transparent); outline-offset:3px }
+.tone_primary { border-color:#0ba585; background:linear-gradient(135deg,#12b994,#079c83); color:#fff; box-shadow:0 9px 22px #079c8335 }
+.tone_primary:hover:not(:disabled) { background:linear-gradient(135deg,#0ead8a,#078b75) }
+.tone_danger { border-color:#efb7b7; background:#fff8f7; color:#a63a3a }
+.tone_success { border-color:#81d2ba; background:#eafaf5; color:#08715f }
+.fieldLabel { display:flex; align-items:center; gap:7px }
+.fieldLabel .icon { width:15px; height:15px; color:#168a74 }
+.fieldHint { margin-top:-2px; color:#80948f; font-size:10px; letter-spacing:0; text-transform:none }
+.filters .wide input { min-height:48px; border-color:#8fcdbc; background:#fff; box-shadow:inset 0 1px 2px #174b4012,0 0 0 4px #eaf8f4 }
+.filters .wide input:focus { border-color:#10a184; box-shadow:0 0 0 4px #16aa8a20 }
+.filters .check { min-height:44px; padding:0 12px; border:1px solid #d6e5e1; border-radius:14px; background:#f9fcfb }
+.filters .check input { width:18px; height:18px; accent-color:var(--green) }
+.actions { grid-column:span 2; justify-content:flex-end }
+.resultBar { padding:13px 16px; border:1px solid #d7e8e3; border-radius:17px; background:#ffffffc9; box-shadow:0 7px 20px #164e420c }
+.export { display:flex; align-items:center; gap:7px; padding:9px 13px; border:1px solid #aad8cc; border-radius:999px; background:#effaf7; font-weight:750 }
+.export small { color:#63837b; font-weight:500 }
+.metric { position:relative; overflow:hidden; min-height:118px }
+.metric:after { content:""; position:absolute; right:-24px; bottom:-28px; width:88px; height:88px; border-radius:50%; background:#c9f3e8 }
+.metric strong { position:relative; z-index:1 }
+.tablePanel table { min-width:860px }
+.tablePanel th { position:sticky; top:0; z-index:1; background:#f8fcfb }
+.tablePanel tbody tr:focus-within { background:#eaf8f4 }
+.funnel>article,.funnel article>button,.listCards>button { border-radius:17px; box-shadow:0 7px 18px #164e420d }
+.drawer { border-radius:28px 0 0 28px; box-shadow:-18px 0 50px #06251f35 }
+@media(max-width:1100px){.tabs button,.tabs a{grid-template-columns:32px 1fr}.navIcon{width:32px;height:32px}}
+@media(max-width:700px){.actions{grid-column:auto;justify-content:flex-start}.actionButton{min-height:46px}.tabs button,.tabs a{min-width:190px}.resultBar{padding:12px}.export{max-width:100%;flex-wrap:wrap}.drawer{border-radius:22px 0 0 22px}}
+@media(max-width:390px){.shell{padding:8px 8px 66px}.hero{min-height:250px}.heroContent{padding:24px 18px}.hero h1{font-size:31px}.tabs{margin:-12px 6px 20px}.filters{padding:14px}.actions{display:grid;grid-template-columns:1fr}.actionButton{width:100%}.selectionTray{width:calc(100% - 16px);gap:10px}.selectionTray span{font-size:12px}}
+@media(prefers-reduced-motion:reduce){.shell *,.shell *:before,.shell *:after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+
