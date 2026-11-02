@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { createProspectList, dashboard, executeCommercialMission, exportCsv, getEstablishmentDossier, getProspectList, initializeDatabase, interpretCommercialIntent, listProspectLists, scoreCommercialRecord, searchEstablishments, searchEstablishmentsPage } from "../src/index.js";
+import { createProspectList, dashboard, executeCommercialMission, exportCsv, getCommercialAccount, getEstablishmentDossier, getProspectList, initializeDatabase, interpretCommercialIntent, listProspectLists, registerCommercialInteraction, scoreCommercialRecord, searchEstablishments, searchEstablishmentsPage, upsertCommercialAccount, validatePublicUrl } from "../src/index.js";
 import { withDatabase } from "../src/duckdb.js";
 
 async function fixture() {
@@ -106,6 +106,35 @@ test("persists and reopens prospecting lists with history", async () => {
     const reopened = await getProspectList(db, created.id);
     assert.equal(reopened?.items.length, 1);
     assert.equal(reopened?.history[0]?.action, "created");
+  } finally { await cleanup(); }
+});
+
+test("serializes concurrent access to the same DuckDB file", async () => {
+  const { db, cleanup } = await fixture();
+  try {
+    const [metrics, lists] = await Promise.all([dashboard(db), listProspectLists(db)]);
+    assert.equal(metrics.summary.total, 2);
+    assert.deepEqual(lists, []);
+  } finally { await cleanup(); }
+});
+
+test("blocks private enrichment destinations", async () => {
+  await assert.rejects(() => validatePublicUrl("http://127.0.0.1/internal"), /privado|local/i);
+  await assert.rejects(() => validatePublicUrl("file:///etc/passwd"), /HTTP/i);
+});
+
+test("persists commercial account, interaction and history separately from registry data", async () => {
+  const { db, cleanup } = await fixture();
+  try {
+    await upsertCommercialAccount(db, { cnpj: "12345678000190", product: "xmenu", owner: "Ana", stage: "qualified", nextActivityAt: "2026-11-10T14:00:00", notes: "Contato autorizado", leadOrigin: "lista-teste" });
+    await registerCommercialInteraction(db, { cnpj: "12345678000190", product: "xmenu", interactionType: "note", summary: "Diagnóstico inicial registrado", owner: "Ana", nextActivityAt: "2026-11-10T14:00:00" });
+    const account = await getCommercialAccount(db, "12345678000190", "xmenu");
+    assert.equal(account.accounts[0]?.stage, "qualified");
+    assert.match(String(account.accounts[0]?.next_activity_at), /2026-11-10 14:00/);
+    assert.equal(account.interactions[0]?.summary, "Diagnóstico inicial registrado");
+    assert.equal(account.history.length, 2);
+    const registry = await searchEstablishments(db, { query: "12345678000190" });
+    assert.equal(registry[0]?.trade_name, "SABOR TESTE");
   } finally { await cleanup(); }
 });
 

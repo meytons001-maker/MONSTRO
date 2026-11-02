@@ -4,4 +4,7 @@ export * from "./repository.js";
 export * from "./commercial-mission.js";
 export * from "./audit.js";
 export * from "./integration-contracts.js";
+export * from "./enrichment.js";
+export * from "./portfolio.js";
 export { SCHEMA_SQL } from "./schema.js";
+
