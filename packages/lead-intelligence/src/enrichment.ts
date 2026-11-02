@@ -71,8 +71,12 @@ export async function enrichFromPublicWebsite(databasePath: string, cnpjInput: s
     const discoveries: Array<{ fieldType: string; value: string; conflict: boolean; detail?: string }> = [{ fieldType: exactCnpj ? "official_site" : "site_candidate", value: page.url, conflict: false }];
     for (const email of emails) { const conflict = Boolean(exactCnpj && registry.email && String(registry.email).toLowerCase() !== email); discoveries.push({ fieldType: "commercial_email", value: email, conflict, detail: conflict ? `Cadastro: ${registry.email}` : undefined }); }
     for (const phone of phones) { const registered = [registry.phone_1, registry.phone_2].filter(Boolean).map((value) => normalizePhone(String(value))); const conflict = Boolean(exactCnpj && registered.length && !registered.includes(phone)); discoveries.push({ fieldType: "commercial_phone", value: phone, conflict, detail: conflict ? `Cadastro: ${registered.join(" / ")}` : undefined }); }
-    for (const value of social) discoveries.push({ fieldType: "social_profile", value, conflict: false });
-    if (description) discoveries.push({ fieldType: "service_description", value: description.slice(0, 500), conflict: false });
+    for (const value of social) {
+      const host = new URL(value).hostname.toLowerCase().replace(/^www\./, "");
+      const platform = host.split(".")[0];
+      discoveries.push({ fieldType: exactCnpj ? `official_${platform}` : `${platform}_candidate`, value, conflict: false });
+    }
+    if (description) discoveries.push({ fieldType: exactCnpj ? "verified_company_description" : "company_description_candidate", value: description.slice(0, 500), conflict: false });
     await withDatabase(databasePath, async (connection) => {
       await connection.run(SCHEMA_SQL); await connection.run("BEGIN TRANSACTION");
       try {
@@ -121,7 +125,7 @@ export async function runControlledEnrichmentSample(databasePath: string, limit 
     scope: { requested: sampleSize, processed: results.length, rule: "estabelecimentos ativos, um por domínio empresarial válido e não gratuito, ordenados por CNPJ" },
     summary: {
       sitesIdentified: confirmed.length,
-      commercialChannelsFound: confirmed.filter((item) => Array.isArray(item.discoveries) && item.discoveries.some((discovery) => ["commercial_email", "commercial_phone", "social_profile"].includes(discovery.fieldType))).length,
+      commercialChannelsFound: confirmed.filter((item) => Array.isArray(item.discoveries) && item.discoveries.some((discovery) => ["commercial_email", "commercial_phone"].includes(discovery.fieldType) || String(discovery.fieldType).startsWith("official_"))).length,
       withConflicts: confirmed.filter((item) => Array.isArray(item.discoveries) && item.discoveries.some((discovery) => discovery.conflict)).length,
       notEnriched: results.length - confirmed.length,
       addedToPortfolio: results.filter((item) => item.addedToPortfolio).length,
@@ -130,4 +134,3 @@ export async function runControlledEnrichmentSample(databasePath: string, limit 
     warning: "Resultados exclusivos desta amostra; não extrapolar para Salvador.",
   };
 }
-
