@@ -5,6 +5,8 @@ import { databasePath, leadModule, publicError } from "./server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+let metricsCache: { value: unknown; expiresAt: number } | undefined;
+
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const product = url.searchParams.get("product") as ProductSegment | null;
@@ -19,17 +21,24 @@ export async function GET(request: Request) {
     offset: Math.max(0, (Number(url.searchParams.get("page") ?? 1) - 1) * Math.min(250, Math.max(1, Number(url.searchParams.get("pageSize") ?? 50)))),
   };
   try {
+    const requestStarted = performance.now();
     const { dashboard, exportCsv, searchEstablishmentsPage } = await leadModule();
     if (url.searchParams.get("format") === "csv") {
       return new Response(await exportCsv(databasePath(), { ...options, limit: 100_000 }), {
         headers: { "content-type": "text/csv; charset=utf-8", "content-disposition": "attachment; filename=monstro-leads.csv", "x-monstro-export-limit": "100000" },
       });
     }
-    // DuckDB permits one process-level handle for this local file. Keep dashboard
-    // and search sequential so native instances never compete for the same lock.
-    const metrics = await dashboard(databasePath());
+    const metricsStarted = performance.now();
+    if (!metricsCache || metricsCache.expiresAt < Date.now()) metricsCache = { value: await dashboard(databasePath()), expiresAt: Date.now() + 300_000 };
+    const metrics = metricsCache.value;
+    const searchStarted = performance.now();
     const results = await searchEstablishmentsPage(databasePath(), options);
-    return NextResponse.json({ metrics, results });
+    const completed = performance.now();
+    const timing = { metricsMs: Math.round(searchStarted - metricsStarted), searchMs: Math.round(completed - searchStarted), totalMs: Math.round(completed - requestStarted) };
+    console.info("[lead-intelligence:search]", JSON.stringify({ ...timing, total: results.total, filters: { product: options.product, neighborhood: options.neighborhood, active: options.active, hasPhone: options.hasPhone, hasEmail: options.hasEmail, exactQuery: options.query?.replace(/\D/g, "").length === 14 } }));
+    const response = NextResponse.json({ metrics, results, timing });
+    response.headers.set("server-timing", `metrics;dur=${timing.metricsMs}, search;dur=${timing.searchMs}, total;dur=${timing.totalMs}`);
+    return response;
   } catch (error) {
     return NextResponse.json({ error: publicError(error) }, { status: 500 });
   }
