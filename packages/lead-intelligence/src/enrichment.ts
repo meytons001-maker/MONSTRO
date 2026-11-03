@@ -7,6 +7,7 @@ import { upsertCommercialAccount } from "./portfolio.js";
 
 const MAX_BYTES = 1_000_000;
 const BLOCKED_HOSTS = new Set(["localhost", "localhost.localdomain"]);
+const FREE_EMAIL_DOMAINS = new Set(["gmail.com","hotmail.com","outlook.com","yahoo.com","yahoo.com.br","icloud.com","bol.com.br","uol.com.br","live.com","terra.com.br","globo.com"]);
 
 function privateAddress(address: string) {
   if (address === "::1" || address === "::" || address.startsWith("fe80:") || address.startsWith("fc") || address.startsWith("fd")) return true;
@@ -42,7 +43,11 @@ async function publicFetch(input: string, redirectCount = 0): Promise<{ url: str
   if (!contentType.includes("text/html")) throw new Error("A fonte não retornou HTML.");
   const length = Number(response.headers.get("content-length") ?? 0);
   if (length > MAX_BYTES) throw new Error("A página excede o limite de 1 MB.");
-  const html = (await response.text()).slice(0, MAX_BYTES);
+  const bytes=new Uint8Array(await response.arrayBuffer()).slice(0,MAX_BYTES);
+  const headerCharset=contentType.match(/charset=([^;\s]+)/i)?.[1]?.replace(/["']/g,"");
+  const headerSample=new TextDecoder("windows-1252").decode(bytes.slice(0,4096));
+  const metaCharset=headerSample.match(/<meta[^>]+charset=["']?([^"'\s/>]+)/i)?.[1]??headerSample.match(/<meta[^>]+content=["'][^"']*charset=([^"';\s]+)/i)?.[1];
+  let html:string;try{html=new TextDecoder(headerCharset||metaCharset||"utf-8").decode(bytes)}catch{html=new TextDecoder("utf-8").decode(bytes)}
   return { url: response.url || url.toString(), html };
 }
 
@@ -71,10 +76,12 @@ export async function enrichFromPublicWebsite(databasePath: string, cnpjInput: s
     const discoveries: Array<{ fieldType: string; value: string; conflict: boolean; detail?: string }> = [{ fieldType: exactCnpj ? "official_site" : "site_candidate", value: page.url, conflict: false }];
     for (const email of emails) { const conflict = Boolean(exactCnpj && registry.email && String(registry.email).toLowerCase() !== email); discoveries.push({ fieldType: "commercial_email", value: email, conflict, detail: conflict ? `Cadastro: ${registry.email}` : undefined }); }
     for (const phone of phones) { const registered = [registry.phone_1, registry.phone_2].filter(Boolean).map((value) => normalizePhone(String(value))); const conflict = Boolean(exactCnpj && registered.length && !registered.includes(phone)); discoveries.push({ fieldType: "commercial_phone", value: phone, conflict, detail: conflict ? `Cadastro: ${registered.join(" / ")}` : undefined }); }
-    for (const value of social) {
+    const socialPlatforms=social.map((value)=>new URL(value).hostname.toLowerCase().replace(/^www\./,"").split(".")[0]);
+    for (const [index,value] of social.entries()) {
       const host = new URL(value).hostname.toLowerCase().replace(/^www\./, "");
       const platform = host.split(".")[0];
-      discoveries.push({ fieldType: exactCnpj ? `official_${platform}` : `${platform}_candidate`, value, conflict: false });
+      const conflicting=socialPlatforms.filter((item)=>item===platform).length>1;
+      discoveries.push({ fieldType: conflicting?`${platform}_conflicting`:exactCnpj?`official_${platform}`:`${platform}_candidate`, value, conflict: conflicting,detail:conflicting?"Múltiplos perfis vinculados pela mesma fonte; requer revisão manual.":undefined });
     }
     if (description) discoveries.push({ fieldType: exactCnpj ? "verified_company_description" : "company_description_candidate", value: description.slice(0, 500), conflict: false });
     await withDatabase(databasePath, async (connection) => {
@@ -94,12 +101,28 @@ export async function enrichFromPublicWebsite(databasePath: string, cnpjInput: s
 
 export async function getDigitalDiscoveries(databasePath: string, cnpj: string) {
   return withDatabase(databasePath, async (connection) => { await connection.run(SCHEMA_SQL); return rows(connection, `SELECT
-    CASE WHEN confirmation_level='corroborated_domain' AND field_type='official_site' THEN 'site_candidate' ELSE field_type END field_type,
+    CASE
+      WHEN confirmation_level='corroborated_domain' AND field_type='official_site' THEN 'site_candidate'
+      WHEN field_type='social_profile' AND lower(value) LIKE '%instagram.com/%' THEN CASE WHEN confirmation_level='confirmed_cnpj' THEN 'official_instagram' ELSE 'instagram_candidate' END
+      WHEN field_type='social_profile' AND lower(value) LIKE '%facebook.com/%' THEN CASE WHEN confirmation_level='confirmed_cnpj' THEN 'official_facebook' ELSE 'facebook_candidate' END
+      WHEN field_type='service_description' THEN CASE WHEN confirmation_level='confirmed_cnpj' THEN 'verified_company_description' ELSE 'company_description_candidate' END
+      ELSE field_type END field_type,
     value,source_url,cast(consulted_at AS VARCHAR) consulted_at,
     CASE WHEN confirmation_level='corroborated_domain' THEN 'registry_domain_candidate' ELSE confirmation_level END confirmation_level,
     CASE WHEN confirmation_level='corroborated_domain' THEN false ELSE conflicts_with_registry END conflicts_with_registry,
     CASE WHEN confirmation_level='corroborated_domain' THEN NULL ELSE conflict_detail END conflict_detail
     FROM digital_discoveries WHERE cnpj=${sql(cnpj.replace(/\D/g, ""))} ORDER BY consulted_at DESC`); });
+}
+
+export async function automaticallyEnrichCompany(databasePath:string,cnpjInput:string,{force=false,maxAgeDays=7}:{force?:boolean;maxAgeDays?:number}={}){
+  const cnpj=cnpjInput.replace(/\D/g,"");if(cnpj.length!==14)throw new Error("CNPJ inválido.");
+  const context=await withDatabase(databasePath,async(connection)=>{await connection.run(SCHEMA_SQL);const registry=(await rows(connection,`SELECT e.cnpj,e.email,e.trade_name,e.neighborhood,e.activity_start_date,e.primary_cnae,e.registration_status,c.legal_name FROM establishments e LEFT JOIN companies c ON c.cnpj_root=e.cnpj_root WHERE e.cnpj=${sql(cnpj)} LIMIT 1`))[0];const cached=(await rows(connection,`SELECT candidate_url,cast(consulted_at AS VARCHAR) consulted_at FROM enrichment_runs WHERE cnpj=${sql(cnpj)} AND status='completed' AND consulted_at > current_timestamp - INTERVAL '${Math.min(30,Math.max(1,maxAgeDays))} days' ORDER BY consulted_at DESC LIMIT 1`))[0];return{registry,cached}});
+  if(!context.registry)throw new Error("Empresa não encontrada na base cadastrada.");
+  if(context.cached&&!force)return{cnpj,status:"cached",sourceUrl:context.cached.candidate_url,consultedAt:context.cached.consulted_at,discoveries:await getDigitalDiscoveries(databasePath,cnpj)};
+  const domain=String(context.registry.email??"").split("@")[1]?.trim().toLowerCase();
+  if(!domain||FREE_EMAIL_DOMAINS.has(domain)||!domain.includes("."))return{cnpj,status:"unavailable",reason:"Cadastro sem domínio empresarial verificável para iniciar a pesquisa gratuita.",registry:context.registry};
+  try{const result=await enrichFromPublicWebsite(databasePath,cnpj,`https://${domain}`);return{...result,status:result.exactCnpj?"success":"partial",registry:context.registry}}
+  catch(error){return{cnpj,status:"error",reason:error instanceof Error?error.message:"Falha na consulta pública.",registry:context.registry}}
 }
 
 export async function runControlledEnrichmentSample(databasePath: string, limit = 20) {

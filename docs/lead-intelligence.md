@@ -41,7 +41,7 @@ Automação comercial permanece desativada na V1. Uma evolução segura deve usa
 
 ## Segmentação
 
-Os conjuntos de CNAE de XMenu e Cotare ficam em `packages/lead-intelligence/src/config.ts`. São filtros de potencial, não afirmações de compatibilidade, preço, comissão ou autorização comercial.
+Os conjuntos de CNAE de XMenu e Kotari ficam em `packages/lead-intelligence/src/config.ts`. O identificador técnico legado `cotare` é preservado para compatibilidade. São filtros de potencial, não afirmações de compatibilidade, preço, comissão ou autorização comercial.
 
 ## Commercial Intelligence Engine
 

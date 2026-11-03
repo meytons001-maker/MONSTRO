@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { createProspectList, dashboard, executeCommercialMission, exportCsv, getCommercialAccount, getEstablishmentDossier, getProspectList, initializeDatabase, interpretCommercialIntent, listProspectLists, registerCommercialInteraction, scoreCommercialRecord, searchEstablishments, searchEstablishmentsPage, upsertCommercialAccount, validatePublicUrl } from "../src/index.js";
+import { automaticallyEnrichCompany, createProspectList, dashboard, executeCommercialMission, exportCsv, getCommercialAccount, getEstablishmentDossier, getProspectList, initializeDatabase, interpretCommercialIntent, listProspectLists, registerCommercialInteraction, scoreCommercialRecord, searchEstablishments, searchEstablishmentsPage, upsertCommercialAccount, validatePublicUrl } from "../src/index.js";
 import { withDatabase } from "../src/duckdb.js";
 
 async function fixture() {
@@ -123,6 +123,8 @@ test("blocks private enrichment destinations", async () => {
   await assert.rejects(() => validatePublicUrl("file:///etc/passwd"), /HTTP/i);
 });
 
+test("reports automatic enrichment as unavailable without a business domain", async()=>{const{db,cleanup}=await fixture();try{const result=await automaticallyEnrichCompany(db,"87654321000100");assert.equal(result.status,"unavailable");assert.match(String(result.reason),/domínio empresarial/i)}finally{await cleanup()}});
+
 test("persists commercial account, interaction and history separately from registry data", async () => {
   const { db, cleanup } = await fixture();
   try {
@@ -137,4 +139,3 @@ test("persists commercial account, interaction and history separately from regis
     assert.equal(registry[0]?.trade_name, "SABOR TESTE");
   } finally { await cleanup(); }
 });
-

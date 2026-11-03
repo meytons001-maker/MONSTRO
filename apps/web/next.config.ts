@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  output: "standalone",
+  output: process.env.MONSTRO_STANDALONE === "false" ? undefined : "standalone",
   poweredByHeader: false,
   async headers() { return [{ source: "/:path*", headers: [
     { key: "X-Content-Type-Options", value: "nosniff" },
