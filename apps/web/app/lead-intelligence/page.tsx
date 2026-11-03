@@ -65,6 +65,7 @@ export default function LeadIntelligencePage() {
       <NavItem icon="funnel" title="Funil Comercial" description="Acompanhar oportunidades" active={view === "funnel"} onClick={() => setView("funnel")}/>
       <NavItem icon="agenda" title="Agenda" description="Próximas atividades" active={view === "agenda"} onClick={() => setView("agenda")}/>
       <NavItem icon="lists" title="Listas" description="Grupos de prospecção" active={view === "lists"} onClick={() => void showLists()}/>
+      <NavItem icon="sparkles" title="Inaugurações" description="Antecipar novas operações" href="/divulgado/inauguracoes"/>
       <NavItem icon="sparkles" title="Missões de IA" description="Pesquisas inteligentes" href="/commercial-intelligence"/>
     </nav>
     {error && <div className={styles.error} role="alert"><div><b>Consulta não concluída.</b><p>{error}</p>{payload && <small>Os dados visíveis são da última consulta bem-sucedida{lastSuccess ? ` às ${lastSuccess.toLocaleTimeString("pt-BR")}` : ""}.</small>}</div><ActionButton tone="danger" icon="reset" onClick={() => void load(undefined, page)}>Tentar novamente</ActionButton></div>}

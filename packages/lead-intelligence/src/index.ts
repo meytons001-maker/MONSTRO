@@ -6,5 +6,5 @@ export * from "./audit.js";
 export * from "./integration-contracts.js";
 export * from "./enrichment.js";
 export * from "./portfolio.js";
+export * from "./openings.js";
 export { SCHEMA_SQL } from "./schema.js";
-
