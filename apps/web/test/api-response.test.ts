@@ -1,0 +1,4 @@
+import assert from "node:assert/strict";import test from "node:test";import { ApiSessionExpiredError,readApiJson } from "../lib/api-response";
+test("reports an expired API session instead of parsing login HTML",async()=>{const response=new Response(JSON.stringify({error:"Sessão expirada"}),{status:401,headers:{"content-type":"application/json"}});await assert.rejects(()=>readApiJson(response),ApiSessionExpiredError)});
+test("rejects non-JSON API responses without leaving the caller pending",async()=>{const response=new Response("<html>login</html>",{status:200,headers:{"content-type":"text/html"}});await assert.rejects(()=>readApiJson(response),/Resposta inesperada/)});
+test("parses a successful JSON API response",async()=>{const result=await readApiJson<{total:number}>(new Response('{"total":326}',{headers:{"content-type":"application/json"}}));assert.equal(result.total,326)});

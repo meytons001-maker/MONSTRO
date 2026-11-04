@@ -6,7 +6,7 @@ export default function Home() {
     <main className="shell">
       <header className="topbar">
         <div><span className="mark">M</span><strong>MONSTRO</strong><small> V0 / ENGINEERING COCKPIT</small></div>
-        <div className="status"><i /> CORE ONLINE</div>
+        <div className="platformNav" style={{ display: "flex", alignItems: "center", gap: 18 }}><a href="/divulgado" style={{ color: "#d7ff45", fontSize: 10, fontWeight: 800, textDecoration: "none" }}>DIVULGADO</a><div className="status"><i /> CORE ONLINE</div></div>
       </header>
 
       <section className="workspace">
@@ -44,3 +44,4 @@ export default function Home() {
     </main>
   );
 }
+

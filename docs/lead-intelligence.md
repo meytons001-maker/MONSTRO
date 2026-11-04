@@ -1,0 +1,75 @@
+# MONSTRO Lead Intelligence V1
+
+Módulo comercial separado do motor Alpha. Ele usa DuckDB para consultar Parquet público da Receita Federal por meio do espelho CNPJ Aberto, persiste a seleção localmente e mantém dados cadastrais separados dos dados de CRM.
+
+## Fonte e cobertura
+
+- Fonte primária: dados abertos do CNPJ da Receita Federal.
+- Espelho colunar: `cnpjaberto/cnpj-dados-receita-brasil-2026-10` no Hugging Face.
+- Competência padrão: `2026-10`; atualização do espelho registrada como `2026-10-19`.
+- Salvador: código RFB/TOM `3849`; código IBGE `2927408`.
+- Situação ativa: código `02`.
+
+Cada execução registra competência, URL, data, filtro, quantidade e cobertura (`sample` ou `full`). Uma execução limitada nunca é apresentada como carga completa.
+
+## Importação
+
+```powershell
+# amostra verificável (padrão: 1.000 ativos)
+pnpm --filter @monstro/lead-intelligence import:salvador -- --db C:\dados\leads.duckdb --limit 1000
+
+# carga integral da competência (requer tempo, rede e espaço em disco)
+pnpm --filter @monstro/lead-intelligence import:salvador -- --db C:\dados\leads.duckdb --limit full
+
+# incluir situações inativas
+pnpm --filter @monstro/lead-intelligence import:salvador -- --db C:\dados\leads.duckdb --limit full --all-statuses
+
+# carga retomável a partir de shards previamente baixados
+pnpm --filter @monstro/lead-intelligence import:salvador -- --db C:\dados\leads.duckdb --source-dir C:\dados\cnpj-2026-10 --limit full --all-statuses
+
+# auditoria reproduzível da competência carregada
+pnpm --filter @monstro/lead-intelligence exec tsx src/cli.ts audit --db C:\dados\leads.duckdb
+```
+
+O modo padrão substitui controladamente os estabelecimentos da mesma competência e município. `--no-relations` permite validar rapidamente somente estabelecimentos; sem essa opção, empresas e QSA são relacionados pela raiz de oito dígitos.
+
+## CRM e conformidade
+
+O esquema inclui empresas, estabelecimentos, sócios, contatos comerciais, interesses por produto, leads, oportunidades, interações, propostas, campanhas e preferências de conformidade. Contatos comerciais e dados cadastrais não compartilham a mesma tabela.
+
+Automação comercial permanece desativada na V1. Uma evolução segura deve usar fila com limites diários, deduplicação, opt-out antes do envio, aprovação humana de mensagens/propostas, templates aprovados por canal e auditoria imutável. Nenhum e-mail, WhatsApp, ligação ou publicação é disparado por este módulo.
+
+## Segmentação
+
+Os conjuntos de CNAE de XMenu e Kotari ficam em `packages/lead-intelligence/src/config.ts`. O identificador técnico legado `cotare` é preservado para compatibilidade. São filtros de potencial, não afirmações de compatibilidade, preço, comissão ou autorização comercial.
+
+## Commercial Intelligence Engine
+
+A rota `/commercial-intelligence` aceita comandos naturais e executa um recorte auditável da missão comercial. A API `POST /api/commercial-intelligence/missions` interpreta segmento e bairro, consulta exclusivamente o DuckDB cadastral, deduplica pelo CNPJ e devolve cobertura, dossiês, evidências, prioridade explicável, perguntas e um rascunho que exige aprovação humana.
+
+Exemplo:
+
+```json
+{"intent":"Pesquise restaurantes na Vila Laura, Salvador, Bahia.","limit":25}
+```
+
+O interpretador atual é determinístico e cobre os segmentos alimentícios configurados. Site oficial, redes empresariais, avaliações e geocodificação permanecem marcados como integrações não conectadas. O resultado vazio significa apenas ausência dentro da competência e cobertura importadas, nunca inexistência de empresas na região. MONSTRO não envia mensagens e não compartilha dados com o Divulgado nesta versão.
+
+## Resultado da carga V1.1
+
+Execução `99724c44-8ee1-4837-86a5-116052d66133`, competência `2026-10`, cobertura `full`, todos os status cadastrais:
+
+- 1.025.921 estabelecimentos e CNPJs únicos; zero duplicações.
+- 334.590 ativos.
+- 869.393 com telefone publicado.
+- 778.898 com e-mail publicado.
+- 993.057 empresas relacionadas e 408.681 registros QSA deduplicados.
+- 30 arquivos Parquet validados, total de 4.848.183.310 bytes.
+
+A cobertura `full` significa todos os registros do município RFB `3849` presentes nos 10 shards de estabelecimentos da competência usada; não significa cobertura de fontes digitais ou garantia de atualidade fora dessa competência.
+
+## Busca e exportação
+
+`GET /api/lead-intelligence` aceita `q`, `product`, `neighborhood`, `active`, `hasPhone`, `hasEmail`, `page` e `pageSize` (máximo 250). A resposta contém `results.total`, `page`, `pages` e `items`. `format=csv` exporta os mesmos filtros, com limite explícito de 100.000 linhas no cabeçalho `x-monstro-export-limit`.
+
+Completude cadastral, adequação ao produto e engajamento comercial possuem scores separados. Engajamento começa em zero e só pode aumentar com interações comerciais persistidas. Os contratos versionados de integração são apenas tipos; nenhum transporte ou sincronização com o Divulgado está ativo.

@@ -1,0 +1,1 @@
+export default function OfflinePage(){return <main style={{minHeight:"100vh",display:"grid",placeItems:"center",padding:24,background:"#f4f8f7",color:"#173b32",fontFamily:"system-ui"}}><section><h1>MONSTRO está offline</h1><p>Reconecte-se para consultar dados empresariais. Nenhuma resposta da API foi armazenada neste dispositivo.</p></section></main>}
