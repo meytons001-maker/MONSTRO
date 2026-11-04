@@ -80,6 +80,8 @@ test("returns a filtered page with an independent total", async () => {
   } finally { await cleanup(); }
 });
 
+test("does not turn digits embedded in a company name into a broad CNPJ search",async()=>{const{db,cleanup}=await fixture();try{const result=await searchEstablishmentsPage(db,{query:"EMPRESA-INEXISTENTE-2026",limit:50});assert.equal(result.total,0);assert.equal(result.items.length,0)}finally{await cleanup()}});
+
 test("keeps completeness, product fit and engagement independent", () => {
   const scores = scoreCommercialRecord({ registration_status: "02", primary_cnae: "5611201", phone_1: "71", email: null, xmenu: true }, ["5611201"]);
   assert.equal(scores.engagement.score, 0);
@@ -126,6 +128,8 @@ test("blocks private enrichment destinations", async () => {
 test("reports automatic enrichment as unavailable without a business domain", async()=>{const{db,cleanup}=await fixture();try{const result=await automaticallyEnrichCompany(db,"87654321000100");assert.equal(result.status,"unavailable");assert.match(String(result.reason),/domínio empresarial/i)}finally{await cleanup()}});
 
 test("persists opening evidence without inventing missing dates or CNPJs",async()=>{const{db,cleanup}=await fixture();try{const seeded=await seedOpeningRadar(db);assert.equal(seeded.updated,12);const result=await searchOpeningRadar(db,{neighborhood:"Barra"});assert.ok(result.items.length>=2);const vague=result.items.find(item=>item.id==="aloalo-sobrado-braseiro");assert.equal(vague?.exact_date,null);assert.equal(vague?.period_text,"dezembro");assert.equal(vague?.cnpj,null);const history=await searchOpeningRadar(db,{eventType:"opening"});assert.ok(history.items.some(item=>item.classification==="opened"))}finally{await cleanup()}});
+
+test("keeps the company radar responsive while opening signals are refreshed",async()=>{const{db,cleanup}=await fixture();try{const[companies,openings]=await Promise.all([searchEstablishmentsPage(db,{product:"xmenu",active:true,limit:50}),searchOpeningRadar(db,{neighborhood:"Barra"})]);assert.equal(companies.total,1);assert.ok(openings.items.length>=2)}finally{await cleanup()}});
 
 test("persists commercial account, interaction and history separately from registry data", async () => {
   const { db, cleanup } = await fixture();

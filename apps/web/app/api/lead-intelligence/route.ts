@@ -22,7 +22,8 @@ export async function GET(request: Request) {
   };
   try {
     const requestStarted = performance.now();
-    const { dashboard, exportCsv, searchEstablishmentsPage } = await leadModule();
+    const { dashboard, exportCsv, getDatabaseQueueStatus, searchEstablishmentsPage } = await leadModule();
+    const queueBefore = getDatabaseQueueStatus(databasePath());
     if (url.searchParams.get("format") === "csv") {
       return new Response(await exportCsv(databasePath(), { ...options, limit: 100_000 }), {
         headers: { "content-type": "text/csv; charset=utf-8", "content-disposition": "attachment; filename=monstro-leads.csv", "x-monstro-export-limit": "100000" },
@@ -33,8 +34,9 @@ export async function GET(request: Request) {
     const metrics = metricsCache.value;
     const searchStarted = performance.now();
     const results = await searchEstablishmentsPage(databasePath(), options);
+    const databaseTiming = getDatabaseQueueStatus(databasePath()).last;
     const completed = performance.now();
-    const timing = { metricsMs: Math.round(searchStarted - metricsStarted), searchMs: Math.round(completed - searchStarted), totalMs: Math.round(completed - requestStarted) };
+    const timing = { metricsMs: Math.round(searchStarted - metricsStarted), searchMs: Math.round(completed - searchStarted), totalMs: Math.round(completed - requestStarted), queueWaitMs: databaseTiming?.queueWaitMs ?? 0, duckdbMs: databaseTiming?.executionMs ?? 0, queueDepthAtStart: queueBefore.waiting + (queueBefore.active ? 1 : 0) };
     console.info("[lead-intelligence:search]", JSON.stringify({ ...timing, total: results.total, filters: { product: options.product, neighborhood: options.neighborhood, active: options.active, hasPhone: options.hasPhone, hasEmail: options.hasEmail, exactQuery: options.query?.replace(/\D/g, "").length === 14 } }));
     const response = NextResponse.json({ metrics, results, timing });
     response.headers.set("server-timing", `metrics;dur=${timing.metricsMs}, search;dur=${timing.searchMs}, total;dur=${timing.totalMs}`);
@@ -43,4 +45,3 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: publicError(error) }, { status: 500 });
   }
 }
-

@@ -24,9 +24,10 @@ export interface SearchOptions { query?: string; product?: ProductSegment; activ
 function searchWhere(options: SearchOptions) {
   const digits = options.query?.replace(/\D/g, "") ?? "";
   const raw = options.query?.trim() ?? "";
+  const cnpjSearch = /^[\d./-]+$/.test(raw) ? digits : raw;
   const search = raw ? digits.length === 14
     ? `AND e.cnpj = ${sql(digits)}`
-    : `AND (e.cnpj ILIKE ${sql(`%${digits || raw}%`)} OR c.legal_name ILIKE ${sql(`%${raw}%`)} OR e.trade_name ILIKE ${sql(`%${raw}%`)})` : "";
+    : `AND (e.cnpj ILIKE ${sql(`%${cnpjSearch}%`)} OR c.legal_name ILIKE ${sql(`%${raw}%`)} OR e.trade_name ILIKE ${sql(`%${raw}%`)})` : "";
   const active = options.active === undefined ? "" : `AND e.registration_status ${options.active ? "=" : "<>"} '02'`;
   const neighborhood = options.neighborhood ? `AND e.neighborhood ILIKE ${sql(`%${options.neighborhood.trim()}%`)}` : "";
   const cnaes = options.cnaes?.length ? `AND e.primary_cnae IN (${options.cnaes.map(sql).join(",")})` : "";
@@ -138,4 +139,3 @@ export async function getProspectList(databasePath: string, id: string) {
     return { ...numbers(list), items: items.map(numbers), history: history.map(numbers) };
   });
 }
-

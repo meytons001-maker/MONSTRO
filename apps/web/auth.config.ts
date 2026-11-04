@@ -6,5 +6,5 @@ export default {
   trustHost: true,
   useSecureCookies: process.env.NODE_ENV === "production",
   providers: [],
-  callbacks: { authorized: ({ auth }) => Boolean(auth?.user) },
+  callbacks: { authorized: ({ auth, request }) => auth?.user ? true : request.nextUrl.pathname.startsWith("/api/") ? Response.json({ error: "Sessão expirada. Entre novamente para continuar." }, { status: 401 }) : false },
 } satisfies NextAuthConfig;

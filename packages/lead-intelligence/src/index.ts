@@ -7,4 +7,5 @@ export * from "./integration-contracts.js";
 export * from "./enrichment.js";
 export * from "./portfolio.js";
 export * from "./openings.js";
+export { getDatabaseQueueStatus } from "./duckdb.js";
 export { SCHEMA_SQL } from "./schema.js";
